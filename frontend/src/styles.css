@@ -226,9 +226,9 @@ a {
 
 .landing-logo-chip {
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
   background: var(--green);
   color: #fff;
   display: grid;
@@ -237,8 +237,8 @@ a {
 }
 
 .landing-logo-chip svg {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
 }
 
 .landing-shell .landing-topbar .brand-name {
