@@ -354,6 +354,8 @@ class ElevenLabsCallService:
         status = data.get("status", record.status)
         if status in {"done", "ended", "completed"}:
             record.status = "completed"
+        elif status in {"failed", "no-answer", "busy", "cancelled", "error"}:
+            record.status = "failed"
         analysis = data.get("analysis") or {}
         record.summary = (
             analysis.get("transcript_summary")
@@ -451,7 +453,17 @@ class ElevenLabsCallService:
                     )
 
                 # Wait for the single call to reach a terminal state.
+                # Timeout after 5 minutes to prevent infinite polling.
+                poll_start = time.time()
+                _CALL_TIMEOUT_S = 300
                 while single.status not in _TERMINAL_STATUSES:
+                    if time.time() - poll_start > _CALL_TIMEOUT_S:
+                        logger.warning(
+                            "call %s timed out after %ds", single.call_id, _CALL_TIMEOUT_S
+                        )
+                        single.status = "failed"
+                        single.notes = "Timed out waiting for call to complete"
+                        break
                     await asyncio.sleep(2)
                     if single.conversation_id:
                         await self._refresh_status(single)

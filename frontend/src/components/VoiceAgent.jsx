@@ -25,8 +25,8 @@ const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID || '';
  * The auto_dial_* tools return immediately with a `call_id`; the agent should
  * keep talking to the user. A background watcher in this component polls
  * /api/calls/{call_id}/status every few seconds and pushes a
- * `sendContextualUpdate()` into the live conversation each time a new attempt
- * completes (and on the final result), so the agent can naturally narrate
+ * `sendUserMessage()` into the live conversation each time a new attempt
+ * completes (and on the final result), so the agent actively narrates
  * progress.
  *
  * If the browser keeps asking for location: use HTTPS (or localhost), allow the
@@ -65,11 +65,13 @@ export default function VoiceAgent({
 
   const pushToConversation = useCallback((text) => {
     const conv = conversationRef.current;
-    if (!conv?.sendContextualUpdate) return;
+    if (!conv?.sendUserMessage) return;
     try {
-      conv.sendContextualUpdate(text);
+      conv.sendUserMessage(
+        `[SYSTEM UPDATE — do not repeat verbatim, summarise naturally to the user] ${text}`
+      );
     } catch (e) {
-      console.warn('[PawGuard] sendContextualUpdate failed', e);
+      console.warn('[PawGuard] sendUserMessage failed', e);
     }
   }, []);
 
@@ -237,7 +239,7 @@ export default function VoiceAgent({
       // ── Non-blocking sequential auto-dial ──────────────────────────────
       // Returns immediately with status="in_progress". A background watcher
       // (in this component) polls /api/calls/{call_id}/status and pushes a
-      // sendContextualUpdate() each time a new attempt completes, plus a
+      // sendUserMessage() each time a new attempt completes, plus a
       // final update when one place is reached or the loop is exhausted.
       auto_dial_vets: async ({ context } = {}) => {
         try {
@@ -266,7 +268,7 @@ export default function VoiceAgent({
             location_source: loc.source,
             ...(loc.note ? { location_note: loc.note } : {}),
             message:
-              "Started calling vets one by one in the background. Keep the conversation going with the user — you'll receive a system contextual update the moment any clinic answers or all calls are exhausted. Do NOT poll get_call_status; the update will arrive automatically.",
+              "Started calling vets one by one in the background. Keep the conversation going with the user — you'll receive a [SYSTEM UPDATE] message the moment any clinic answers or all calls are exhausted. Summarise it naturally when it arrives. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return { error: 'auto_dial_vet_failed', details: String(err?.message || err) };
@@ -300,7 +302,7 @@ export default function VoiceAgent({
             location_source: loc.source,
             ...(loc.note ? { location_note: loc.note } : {}),
             message:
-              "Started calling foster/shelters one by one in the background. Keep the conversation going with the user — you'll receive a system contextual update the moment any place answers or all calls are exhausted. Do NOT poll get_call_status; the update will arrive automatically.",
+              "Started calling foster/shelters one by one in the background. Keep the conversation going with the user — you'll receive a [SYSTEM UPDATE] message the moment any place answers or all calls are exhausted. Summarise it naturally when it arrives. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return { error: 'auto_dial_shelter_failed', details: String(err?.message || err) };
@@ -341,7 +343,7 @@ export default function VoiceAgent({
             call_id: data.call_id,
             total_attempts_planned: data.total_attempts_planned ?? null,
             message:
-              "Started calling the listed vets one by one. You'll receive contextual updates automatically. Do NOT poll get_call_status.",
+              "Started calling the listed vets one by one. You'll receive [SYSTEM UPDATE] messages automatically. Summarise them naturally. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return {
@@ -382,7 +384,7 @@ export default function VoiceAgent({
             call_id: data.call_id,
             total_attempts_planned: data.total_attempts_planned ?? null,
             message:
-              "Started calling the listed shelters one by one. You'll receive contextual updates automatically. Do NOT poll get_call_status.",
+              "Started calling the listed shelters one by one. You'll receive [SYSTEM UPDATE] messages automatically. Summarise them naturally. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return {
