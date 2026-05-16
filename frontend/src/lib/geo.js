@@ -83,7 +83,11 @@ export async function resolveLatLngForTools() {
 }
 
 export function safeParseAnalysis(text) {
-  if (!text) return null;
+  if (text == null) return null;
+  if (typeof text === 'object' && text !== null && !Array.isArray(text)) {
+    return text;
+  }
+  if (typeof text !== 'string') return null;
   try {
     return JSON.parse(text);
   } catch {

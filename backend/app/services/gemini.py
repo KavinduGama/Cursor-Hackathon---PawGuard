@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 from google import genai
 from google.genai import types
@@ -29,7 +30,7 @@ SYSTEM_INSTRUCTION = """You are PawGuard's vision module — a calm, expert
 animal-rescue triage assistant viewing live video frames from a phone camera.
 
 You will receive frames from the same incident over time. For each frame,
-respond in tight JSON:
+respond in tight JSON: (sometimes user may show the animal in a screen consider those also real and do the analysis)
 
 {
   "animal": "<species/breed if visible, else 'unknown'>",
@@ -179,8 +180,9 @@ class GeminiVisionService:
                     '"confidence":0.0}'
                 )
 
-            session.latest_analysis = text.strip()
-            session.latest_severity = _extract_severity(text)
+            data_dict, canonical = _parse_and_canonicalize_analysis(text)
+            session.latest_analysis = canonical
+            session.latest_severity = str(data_dict.get("severity") or "UNKNOWN")
             session.frame_count += 1
             session.updated_at = time.time()
 
@@ -199,6 +201,74 @@ class GeminiVisionService:
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
+_ANALYSIS_FALLBACK: dict[str, Any] = {
+    "animal": "unknown",
+    "visible_injuries": [],
+    "severity": "UNKNOWN",
+    "changes_since_last": "",
+    "guidance": "Hold camera steady",
+    "confidence": 0.0,
+}
+
+
+def _parse_and_canonicalize_analysis(text: str) -> tuple[dict[str, Any], str]:
+    """Turn model output into a dict plus one canonical JSON string for SQLite."""
+    raw = (text or "").strip()
+    if not raw:
+        d = dict(_ANALYSIS_FALLBACK)
+        return d, json.dumps(d)
+
+    stripped = raw
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE).strip()
+        stripped = re.sub(r"\s*```\s*$", "", stripped).strip()
+
+    data: Any
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError:
+        m = re.search(r"\{[\s\S]*\}", stripped)
+        if not m:
+            d = dict(_ANALYSIS_FALLBACK)
+            return d, json.dumps(d)
+        try:
+            data = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            d = dict(_ANALYSIS_FALLBACK)
+            return d, json.dumps(d)
+
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except json.JSONDecodeError:
+            d = dict(_ANALYSIS_FALLBACK)
+            return d, json.dumps(d)
+
+    if not isinstance(data, dict):
+        d = dict(_ANALYSIS_FALLBACK)
+        return d, json.dumps(d)
+
+    out = {**_ANALYSIS_FALLBACK, **data}
+    if not isinstance(out.get("visible_injuries"), list):
+        out["visible_injuries"] = []
+    sev = str(out.get("severity") or "UNKNOWN").upper()
+    if sev not in ("CRITICAL", "MODERATE", "MILD", "UNKNOWN"):
+        sev = "UNKNOWN"
+    out["severity"] = sev
+    try:
+        out["confidence"] = float(out.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        out["confidence"] = 0.0
+
+    return out, json.dumps(out, ensure_ascii=False)
+
+
+def analysis_payload_to_dict(stored: str) -> dict[str, Any]:
+    """Parse cached/DB analysis text for API responses (always a dict)."""
+    d, _ = _parse_and_canonicalize_analysis(stored or "")
+    return d
+
+
 _DATA_URL_RE = re.compile(r"^data:image/[a-zA-Z]+;base64,")
 
 
@@ -206,14 +276,6 @@ def _decode_data_url(frame: str) -> bytes:
     """Accept either a raw base64 string or a data: URL."""
     clean = _DATA_URL_RE.sub("", frame, count=1)
     return base64.b64decode(clean)
-
-
-_SEVERITY_RE = re.compile(r'"severity"\s*:\s*"(CRITICAL|MODERATE|MILD|UNKNOWN)"')
-
-
-def _extract_severity(text: str) -> str:
-    m = _SEVERITY_RE.search(text or "")
-    return m.group(1) if m else "UNKNOWN"
 
 
 vision_service = GeminiVisionService()

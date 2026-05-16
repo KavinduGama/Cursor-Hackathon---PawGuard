@@ -155,7 +155,7 @@ def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
-_DEMO_PHONE = "+94729351901"
+_DEMO_PHONE = "+94783870640"
 
 _DEMO_VETS: tuple[tuple[str, str], ...] = (
     ("PetCare Veterinary Hospital — Nawala", "47 Nawala Road, Nawala, Sri Lanka"),

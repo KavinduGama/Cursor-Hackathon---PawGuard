@@ -1,7 +1,7 @@
 """Pydantic request/response schemas for the PawGuard API."""
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -31,12 +31,12 @@ class FrameRequest(BaseModel):
 class FrameResponse(BaseModel):
     status: str = "ok"
     frame_count: int
-    analysis: str
+    analysis: dict[str, Any]
 
 
 class ObservationResponse(BaseModel):
     session_id: str
-    analysis: str
+    analysis: dict[str, Any]
     frame_count: int
     severity: Optional[str] = None
     updated_at: float

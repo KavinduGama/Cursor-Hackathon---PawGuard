@@ -10,7 +10,7 @@ from app.models.schemas import (
     StartSessionRequest,
     StartSessionResponse,
 )
-from app.services.gemini import vision_service
+from app.services.gemini import analysis_payload_to_dict, vision_service
 
 router = APIRouter(prefix="/api/vision", tags=["vision"])
 
@@ -28,7 +28,7 @@ async def analyze_frame(req: FrameRequest) -> FrameResponse:
     session = await vision_service.analyze_frame(req.session_id, req.frame)
     return FrameResponse(
         frame_count=session.frame_count,
-        analysis=session.latest_analysis,
+        analysis=analysis_payload_to_dict(session.latest_analysis),
     )
 
 
@@ -39,8 +39,7 @@ async def get_observations(session_id: str) -> ObservationResponse:
         raise HTTPException(status_code=404, detail="session not found")
     return ObservationResponse(
         session_id=session.session_id,
-        analysis=session.latest_analysis
-        or '{"animal":"unknown","severity":"UNKNOWN","guidance":"Point camera at the animal"}',
+        analysis=analysis_payload_to_dict(session.latest_analysis),
         frame_count=session.frame_count,
         severity=session.latest_severity,
         updated_at=session.updated_at,
