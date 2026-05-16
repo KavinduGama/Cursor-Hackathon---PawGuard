@@ -129,13 +129,20 @@ export function RescueIcon({ size = 20 }) {
 
 export function PawIcon({ size = 20 }) {
   return (
-    <Svg size={size}>
-      <ellipse cx="12" cy="14.2" rx="3.3" ry="2.7" />
-      <circle cx="8.1" cy="9.2" r="1.4" />
-      <circle cx="10.8" cy="7.8" r="1.4" />
-      <circle cx="13.2" cy="7.8" r="1.4" />
-      <circle cx="15.9" cy="9.2" r="1.4" />
-    </Svg>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden
+    >
+      <ellipse cx="12" cy="16.2" rx="4.6" ry="3.8" />
+      <ellipse cx="5.6" cy="11" rx="1.9" ry="2.4" />
+      <ellipse cx="18.4" cy="11" rx="1.9" ry="2.4" />
+      <ellipse cx="9" cy="6.2" rx="1.7" ry="2.2" />
+      <ellipse cx="15" cy="6.2" rx="1.7" ry="2.2" />
+    </svg>
   );
 }
 

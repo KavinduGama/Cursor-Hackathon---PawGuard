@@ -226,22 +226,19 @@ a {
 
 .landing-logo-chip {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
   background: var(--green);
   color: #fff;
   display: grid;
   place-items: center;
-  box-shadow:
-    0 6px 16px rgba(20, 145, 145, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 6px 14px rgba(20, 145, 145, 0.28);
 }
 
 .landing-logo-chip svg {
-  width: 24px;
-  height: 24px;
-  stroke-width: 2px;
+  width: 32px;
+  height: 32px;
 }
 
 .landing-shell .landing-topbar .brand-name {
@@ -316,14 +313,16 @@ a {
 }
 
 .landing-hero-art {
-  width: clamp(110px, 34vw, 150px);
+  width: clamp(135px, 40vw, 185px);
   flex-shrink: 0;
 }
 
-.landing-hero-art svg {
+.landing-hero-art svg,
+.landing-hero-art img {
   width: 100%;
   height: auto;
   display: block;
+  mix-blend-mode: multiply;
 }
 
 .landing-start-btn {

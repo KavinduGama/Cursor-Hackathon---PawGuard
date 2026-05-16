@@ -39,7 +39,7 @@ export default function Landing() {
         <header className="landing-topbar">
           <div className="landing-brand-cluster">
             <span className="landing-logo-chip" aria-hidden>
-              <PawIcon size={22} />
+              <PawIcon size={30} />
             </span>
             <div className="brand-copy">
               <div className="brand-name">PawGuard</div>
