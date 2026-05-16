@@ -316,14 +316,16 @@ a {
 }
 
 .landing-hero-art {
-  width: clamp(110px, 34vw, 150px);
+  width: clamp(120px, 38vw, 168px);
   flex-shrink: 0;
 }
 
-.landing-hero-art svg {
+.landing-hero-art svg,
+.landing-hero-art img {
   width: 100%;
   height: auto;
   display: block;
+  mix-blend-mode: multiply;
 }
 
 .landing-start-btn {
