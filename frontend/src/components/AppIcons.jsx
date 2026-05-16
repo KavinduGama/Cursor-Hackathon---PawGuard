@@ -17,6 +17,37 @@ function Svg({ size = 20, children, strokeWidth = 1.9 }) {
   );
 }
 
+export function MenuIcon({ size = 22, strokeWidth: sw = 2 }) {
+  return (
+    <Svg size={size} strokeWidth={sw}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Svg>
+  );
+}
+
+export function BellIcon({ size = 22, strokeWidth = 2 }) {
+  return (
+    <Svg size={size} strokeWidth={strokeWidth}>
+      <path d="M12 21a2 2 0 0 0 2-2H10a2 2 0 0 0 2 2Z" />
+      <path d="M6 8a6 6 0 1 1 12 0c0 4.5 1.7 6 3 7H3c1.3-1 3-2.5 3-7" />
+      <path d="M10 8V6a2 2 0 1 1 4 0v2" />
+    </Svg>
+  );
+}
+
+/** Decorative “community + rescue” motif for teal CTA bar */
+export function PeopleHeartIcon({ size = 26, strokeWidth: sw = 1.85 }) {
+  return (
+    <Svg size={size} strokeWidth={sw}>
+      <circle cx="8.5" cy="8.5" r="2.4" />
+      <path d="M4 20v-2a4 4 0 0 1 8 0v2" />
+      <circle cx="17.5" cy="8.5" r="2.4" />
+      <path d="M13 20v-2a4 4 0 0 1 8 0v2" />
+      <path d="m12 12.8 1-.8 4.2 6.8H6.8Z" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export function HomeIcon({ size = 20 }) {
   return (
     <Svg size={size}>

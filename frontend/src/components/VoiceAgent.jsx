@@ -14,13 +14,14 @@ const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID || '';
  *
  *   - get_vision_analysis()
  *   - find_emergency_vet | find_emergency_vets | find_nearby_vets  → list vets (no dial)
+ *   - find_foster_care                 → list foster/shelters (no dial)
  *   - auto_dial_vets({context?})       → combined find+call sequential loop
- *   - auto_dial_shelters({context?})   → combined find+call sequential loop
+ *   - auto_dial_fosters({context?})    → combined find+call sequential loop
  *   - call_vets_sequentially({places, context?})     → call a pre-selected list
  *   - call_shelters_sequentially({places, context?}) → call a pre-selected list
  *   - get_call_status({call_id})       → manual progress check (the watcher pushes
- *                                        contextual updates automatically, so the
- *                                        agent does NOT need to poll this).
+ *                                        updates automatically, so the agent does
+ *                                        NOT need to poll this).
  *
  * The auto_dial_* tools return immediately with a `call_id`; the agent should
  * keep talking to the user. A background watcher in this component polls
@@ -236,6 +237,27 @@ export default function VoiceAgent({
       find_emergency_vets: findEmergencyVetImpl,
       find_nearby_vets: findEmergencyVetImpl,
 
+      find_foster_care: async (_params) => {
+        try {
+          const loc = await resolveLatLngForTools();
+          const data = await api.findFoster(loc.lat, loc.lng);
+          return {
+            results: (data.results || []).slice(0, 5),
+            location_source: loc.source,
+            ...(loc.note ? { location_note: loc.note } : {}),
+          };
+        } catch (err) {
+          if (err?.code === 'INSECURE_CONTEXT') {
+            return {
+              error: 'insecure_context',
+              details:
+                'Open the app over HTTPS or localhost, or set VITE_USE_DEMO_LOCATION=1 in frontend/.env.',
+            };
+          }
+          return { error: 'find_foster_care_failed', details: String(err?.message || err) };
+        }
+      },
+
       // ── Non-blocking sequential auto-dial ──────────────────────────────
       // Returns immediately with status="in_progress". A background watcher
       // (in this component) polls /api/calls/{call_id}/status and pushes a
@@ -275,7 +297,7 @@ export default function VoiceAgent({
         }
       },
 
-      auto_dial_shelters: async ({ context } = {}) => {
+      auto_dial_fosters: async ({ context } = {}) => {
         try {
           const loc = await resolveLatLngForTools();
           const data = await api.autoDialShelter({

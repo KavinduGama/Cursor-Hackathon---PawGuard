@@ -37,6 +37,13 @@ export const api = {
       body: JSON.stringify({ lat, lng, radius_m }),
     }),
 
+  /** Nearby foster/shelters only (no outbound call). Used by `find_foster_care`. */
+  findFoster: (lat, lng, radius_m = 8000) =>
+    jsonFetch('/api/location/foster', {
+      method: 'POST',
+      body: JSON.stringify({ lat, lng, radius_m }),
+    }),
+
   // ── Combined "find + call" tools used by the triage agent ────────────
   autoDialVet: ({ lat, lng, context, session_id }) =>
     jsonFetch('/api/auto-dial/vet', {

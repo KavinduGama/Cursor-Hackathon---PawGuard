@@ -1,15 +1,13 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  HeartIcon,
   HomeIcon,
-  MapPinIcon,
+  PhoneIcon,
   UserIcon,
 } from './AppIcons.jsx';
 
 const ITEMS = [
   { to: '/', label: 'Home', icon: HomeIcon },
-  { to: '/session', label: 'Find Vets', icon: MapPinIcon },
-  { to: '/results', label: 'Foster Help', icon: HeartIcon },
+  { to: '/session', label: 'Call', icon: PhoneIcon },
   { to: '/profile', label: 'Profile', icon: UserIcon, disabled: true },
 ];
 
@@ -20,7 +18,9 @@ export default function BottomNav() {
   return (
     <nav className="bottom-nav" aria-label="Primary">
       {ITEMS.map((item) => {
-        const active = pathname === item.to;
+        const active =
+          pathname === item.to ||
+          (item.to === '/' ? false : pathname.startsWith(item.to) && item.to !== '/profile');
         const Icon = item.icon;
         return (
           <button

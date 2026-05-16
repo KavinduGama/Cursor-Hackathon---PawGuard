@@ -378,13 +378,10 @@ class ElevenLabsCallService:
                 derived = True
             elif result == "failure":
                 derived = False
-            # result == "unknown" or anything else → leave as None
-        if derived is None:
-            call_successful = analysis.get("call_successful")
-            if call_successful == "success":
-                derived = True
-            elif call_successful == "failure":
-                derived = False
+        # NOTE: we intentionally do NOT fall back to `call_successful` here.
+        # That field reflects whether the AI agent completed its workflow,
+        # not whether the vet/foster is actually available. Using it caused
+        # false negatives ("failure" even though the vet said "come in").
         if derived is not None:
             record.available = derived
 
@@ -468,6 +465,21 @@ class ElevenLabsCallService:
                     if single.conversation_id:
                         await self._refresh_status(single)
 
+                # ElevenLabs generates the transcript summary async after
+                # the call ends. If we exited the loop without a summary,
+                # poll a few more times so the keyword heuristic / classifier
+                # have something to work with.
+                if (
+                    single.status == "completed"
+                    and not single.summary
+                    and single.conversation_id
+                ):
+                    for _ in range(5):
+                        await asyncio.sleep(3)
+                        await self._refresh_status(single)
+                        if single.summary:
+                            break
+
                 # ── LLM classifier fallback (Path 2) ──────────────────────
                 # If dashboard structured output + keyword heuristic still
                 # couldn't determine availability (or to enrich missing
@@ -499,6 +511,14 @@ class ElevenLabsCallService:
                             single.contact_name = outcome["contact_name"]
                         if not single.notes and outcome.get("notes"):
                             single.notes = outcome["notes"]
+
+                # Final safety net: if we still have no availability answer
+                # but the summary clearly contains availability keywords,
+                # use the keyword heuristic one last time.
+                if single.available is None and single.summary:
+                    keyword_guess = _derive_available_from_summary(single.summary)
+                    if keyword_guess is not None:
+                        single.available = keyword_guess
 
                 attempt = CallAttemptSummary(
                     place_name=place.name,

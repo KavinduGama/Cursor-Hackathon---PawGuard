@@ -22,13 +22,19 @@ The prompt must instruct the agent to follow this exact flow:
 2. Call `get_vision_analysis` to read what the camera AI sees.
 3. Describe the animal's condition to the user based on the vision data.
 4. If the animal needs veterinary help, tell the user you will find nearby
-   vets. Call `auto_dial_vets` (optionally `find_emergency_vet` first to
-   list them).
-5. While vets are being called in the background, keep the user calm and
-   informed. **Do NOT poll `get_call_status`** — contextual updates arrive
-   automatically.
-6. When a vet confirms availability, relay the details (name, wait time,
+   vets. Call `find_emergency_vet` first to list them, then
+   `auto_dial_vets` to start calling.
+5. If the situation is non-critical but the animal needs foster/shelter care,
+   call `find_foster_care` to list nearby options, then `auto_dial_fosters`.
+6. While places are being called in the background, keep the user calm and
+   informed. **Do NOT poll `get_call_status`** — you will receive
+   `[SYSTEM UPDATE]` messages automatically. Summarise them naturally.
+7. When a place confirms availability, relay the details (name, wait time,
    address) and wrap up the session.
+
+**Important:** When you receive a message starting with `[SYSTEM UPDATE]`,
+that is an automated update from the calling system. Do NOT repeat it
+verbatim — summarise it naturally for the user.
 
 ### Dynamic variables
 
@@ -38,28 +44,33 @@ The prompt must instruct the agent to follow this exact flow:
 
 ### Client tools (names must match exactly)
 
-Register these five client tools on the dashboard. The frontend implements
+Register these client tools on the dashboard. The frontend implements
 them; the agent invokes them by name.
+
+#### Currently on your dashboard ✅
 
 | Tool name                      | Parameters          | What it does                                        |
 |--------------------------------|---------------------|-----------------------------------------------------|
 | `get_vision_analysis`          | *(none)*            | Returns the latest camera analysis (species, injuries, severity) |
 | `find_emergency_vet`           | *(none)*            | Lists nearby vets with phone numbers — **no call is placed** |
+| `find_foster_care`             | *(none)*            | Lists nearby foster/shelters with phone numbers — **no call is placed** |
 | `auto_dial_vets`               | `context` (optional string) | Finds nearby vets and calls them one by one until one is available |
-| `auto_dial_shelters`           | `context` (optional string) | Same as above but for foster/shelters |
-| `call_vets_sequentially`       | `places` (array), `context` (optional string) | Calls a pre-selected list of vets one by one (from a prior `find_emergency_vet`) |
-| `call_shelters_sequentially`   | `places` (array), `context` (optional string) | Same as above but for foster/shelters |
-| `get_call_status`              | `call_id` (string)  | Manually checks call progress (rarely needed — watchers push updates) |
+| `auto_dial_fosters`            | `context` (optional string) | Same as above but for foster/shelters |
+
+#### Add these to the dashboard (optional but recommended) ➕
+
+These enable the "split-flow" — find first, show the user, then call only
+selected places:
+
+| Tool name                      | Parameters          | What it does                                        |
+|--------------------------------|---------------------|-----------------------------------------------------|
+| `call_vets_sequentially`       | `places` (array of place objects), `context` (optional string) | Calls a pre-selected list of vets one by one (from a prior `find_emergency_vet`) |
+| `call_shelters_sequentially`   | `places` (array of place objects), `context` (optional string) | Same as above but for foster/shelters |
+| `get_call_status`              | `call_id` (string)  | Manually checks call progress (rarely needed — updates arrive automatically) |
 
 **Aliases:** `find_emergency_vets` and `find_nearby_vets` are also handled as
 aliases for `find_emergency_vet`. You only need to register one of the three
 on the dashboard.
-
-**Split-flow vs combined-flow:** The agent can either use `auto_dial_vets`
-(combined: find + call) or the two-step split flow:
-1. Call `find_emergency_vet` to get a list of nearby vets
-2. Present the list to the user
-3. Call `call_vets_sequentially` with the `places` array from step 1
 
 ---
 
@@ -130,8 +141,11 @@ Same fields as the vet agent (`available`, `wait_minutes`, `contact_name`,
 
 - [ ] Triage agent ID in `frontend/.env` (`VITE_ELEVENLABS_AGENT_ID`) matches
       the agent on the dashboard
-- [ ] Triage agent has all 5 client tools registered with the exact names above
-- [ ] Triage agent system prompt follows the flow: vision → triage → find vets → call → report
+- [ ] Triage agent has all 5 core client tools registered with the exact names:
+      `get_vision_analysis`, `find_emergency_vet`, `find_foster_care`,
+      `auto_dial_vets`, `auto_dial_fosters`
+- [ ] Triage agent system prompt follows the flow: vision → triage → find → call → report
+- [ ] Triage agent system prompt includes instruction to handle `[SYSTEM UPDATE]` messages
 - [ ] Vet agent ID in `backend/.env` (`ELEVENLABS_VET_AGENT_ID`) matches its dashboard agent
 - [ ] Foster agent ID in `backend/.env` (`ELEVENLABS_FOSTER_AGENT_ID`) is set
       (currently placeholder `agent_xxx_foster` — **needs a real ID**)
