@@ -226,21 +226,17 @@ a {
 
 .landing-logo-chip {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: var(--green);
-  color: #fff;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  box-shadow:
-    0 6px 16px rgba(20, 145, 145, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: var(--green);
 }
 
 .landing-logo-chip svg {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   stroke-width: 2px;
 }
 
@@ -316,7 +312,7 @@ a {
 }
 
 .landing-hero-art {
-  width: clamp(120px, 38vw, 168px);
+  width: clamp(150px, 46vw, 210px);
   flex-shrink: 0;
 }
 
