@@ -88,13 +88,29 @@ class CallResponse(BaseModel):
     agent_type: Literal["vet", "foster"]
 
 
+class CallAttemptSummary(BaseModel):
+    place_name: str
+    phone: str
+    status: str  # completed | failed
+    available: Optional[bool] = None
+    wait_minutes: Optional[int] = None
+    summary: Optional[str] = None
+
+
 class CallStatusResponse(BaseModel):
     call_id: str
-    status: str  # initiated | in_progress | completed | failed
+    # initiated | in_progress | completed | failed | exhausted | no_results
+    status: str
     summary: Optional[str] = None
     available: Optional[bool] = None
     wait_minutes: Optional[int] = None
     notes: Optional[str] = None
+    # Loop-mode fields (populated when this call_id represents an
+    # auto-dial sequential loop, not a single outbound call):
+    attempts: Optional[List[CallAttemptSummary]] = None
+    successful_place: Optional[Place] = None
+    current_attempt_index: Optional[int] = None
+    total_attempts_planned: Optional[int] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -112,7 +128,9 @@ class AutoDialRequest(BaseModel):
 
 class AutoDialResponse(BaseModel):
     call_id: Optional[str] = None
-    status: str  # initiated | in_progress | failed | no_results
+    # in_progress | no_results | failed
+    status: str
     agent_type: Literal["vet", "foster"]
     place: Optional[Place] = None
     message: Optional[str] = None
+    total_attempts_planned: Optional[int] = None

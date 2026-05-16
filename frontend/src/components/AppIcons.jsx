@@ -1,0 +1,119 @@
+function Svg({ size = 20, children, strokeWidth = 1.9 }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {children}
+    </svg>
+  );
+}
+
+export function HomeIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V20h14V9.5" />
+      <path d="M10 20v-5h4v5" />
+    </Svg>
+  );
+}
+
+export function MapPinIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <path d="M12 22s7-6.4 7-12a7 7 0 1 0-14 0c0 5.6 7 12 7 12Z" />
+      <circle cx="12" cy="10" r="2.6" />
+    </Svg>
+  );
+}
+
+export function HeartIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <path d="M20.4 5.6a5 5 0 0 0-7 0L12 7l-1.4-1.4a5 5 0 0 0-7 7L12 21l8.4-8.4a5 5 0 0 0 0-7Z" />
+    </Svg>
+  );
+}
+
+export function UserIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.5 20c.8-3.4 3.7-5.4 7.5-5.4s6.7 2 7.5 5.4" />
+    </Svg>
+  );
+}
+
+export function PhoneIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <path d="M7.3 2.8c.5-.5 1.4-.5 1.9 0l2.2 2.2c.5.5.5 1.3 0 1.8L9.9 8.3c-.4.4-.5 1.1-.2 1.7a15.4 15.4 0 0 0 4.4 4.4c.6.3 1.3.2 1.7-.2l1.5-1.5c.5-.5 1.3-.5 1.8 0l2.2 2.2c.5.5.5 1.4 0 1.9l-1.2 1.2a3.5 3.5 0 0 1-3.3.9C10.8 17.7 6.3 13.2 5.1 7a3.5 3.5 0 0 1 .9-3.3Z" />
+    </Svg>
+  );
+}
+
+export function BrainIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <path d="M9.4 3.2a2.9 2.9 0 0 0-4.9 2.1v.9a2.7 2.7 0 0 0-1 4.8 3 3 0 0 0 2 5.3h3.2" />
+      <path d="M14.6 3.2a2.9 2.9 0 0 1 4.9 2.1v.9a2.7 2.7 0 0 1 1 4.8 3 3 0 0 1-2 5.3h-3.2" />
+      <path d="M9.2 6.3a2.6 2.6 0 0 1 2.8 2.6V21" />
+      <path d="M14.8 6.3A2.6 2.6 0 0 0 12 8.9" />
+      <path d="M6.5 10.8h2.7" />
+      <path d="M14.8 10.8h2.7" />
+      <path d="M6.9 15h2.2" />
+      <path d="M14.9 15h2.2" />
+    </Svg>
+  );
+}
+
+export function CameraPhoneIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <rect x="7" y="2.5" width="10" height="19" rx="2.2" />
+      <path d="M9.3 8h5.4l.8 1.4v3.4H8.5V9.4L9.3 8Z" />
+      <circle cx="12" cy="10.8" r="1.4" />
+      <path d="M10.4 18h3.2" />
+    </Svg>
+  );
+}
+
+export function RescueIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v9M7.5 12h9" />
+    </Svg>
+  );
+}
+
+export function PawIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <ellipse cx="12" cy="14.2" rx="3.3" ry="2.7" />
+      <circle cx="8.1" cy="9.2" r="1.4" />
+      <circle cx="10.8" cy="7.8" r="1.4" />
+      <circle cx="13.2" cy="7.8" r="1.4" />
+      <circle cx="15.9" cy="9.2" r="1.4" />
+    </Svg>
+  );
+}
+
+export function ClinicIcon({ size = 20 }) {
+  return (
+    <Svg size={size}>
+      <rect x="4" y="4.5" width="16" height="15.5" rx="2" />
+      <path d="M12 8v7M8.5 11.5h7" />
+      <path d="M9 20v-3h6v3" />
+    </Svg>
+  );
+}

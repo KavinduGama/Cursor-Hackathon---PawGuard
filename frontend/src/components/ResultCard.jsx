@@ -1,13 +1,15 @@
+import { ClinicIcon, HomeIcon, MapPinIcon, PhoneIcon } from './AppIcons.jsx';
+
 export default function ResultCard({ result }) {
   const status = (result.status || 'in_progress').toLowerCase();
   const isVet = result.kind === 'vet';
   const label = isVet ? 'Vet clinic call' : 'Foster care call';
-  const icon = isVet ? '🏥' : '🏠';
+  const Icon = isVet ? ClinicIcon : HomeIcon;
 
   return (
     <article className={`card call-card ${isVet ? 'vet' : 'foster'}`}>
       <div className="icon-wrap" aria-hidden>
-        {icon}
+        <Icon size={20} />
       </div>
       <div className="body">
         <div className="row">
@@ -26,9 +28,20 @@ export default function ResultCard({ result }) {
             <span>{result.available ? '✓ Available' : '✗ Unavailable'}</span>
           )}
           {result.wait_minutes != null && (
-            <span>⏱ ~{result.wait_minutes} min</span>
+            <span>~{result.wait_minutes} min</span>
           )}
-          {result.placePhone && <span>📞 {result.placePhone}</span>}
+          {result.placePhone && (
+            <span className="meta-with-icon">
+              <PhoneIcon size={13} />
+              {result.placePhone}
+            </span>
+          )}
+          {result.placeAddress && (
+            <span className="meta-with-icon">
+              <MapPinIcon size={13} />
+              {result.placeAddress}
+            </span>
+          )}
         </div>
       </div>
     </article>

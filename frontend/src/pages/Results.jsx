@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { RescueIcon } from '../components/AppIcons.jsx';
 import { api } from '../lib/api.js';
 import ResultCard from '../components/ResultCard.jsx';
 import BottomNav from '../components/BottomNav.jsx';
@@ -63,7 +64,9 @@ export default function Results() {
           </header>
 
           <div className="card" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-            <div style={{ fontSize: '3rem' }}>🐾</div>
+            <div style={{ color: 'var(--green)', lineHeight: 0 }}>
+              <RescueIcon size={44} />
+            </div>
             <h3 style={{ margin: '0.5rem 0 0.25rem' }}>No rescue session yet</h3>
             <p className="card-meta">
               Start a rescue and your case summary will appear here.
@@ -73,7 +76,7 @@ export default function Results() {
               style={{ marginTop: '1rem' }}
               onClick={() => navigate('/session')}
             >
-              🐾 Begin a rescue
+              Begin a rescue
             </button>
           </div>
         </main>
@@ -231,7 +234,7 @@ export default function Results() {
             className="btn btn-primary btn-block"
             onClick={() => navigate('/session')}
           >
-            🐾 New rescue
+            New rescue
           </button>
           <button className="btn btn-ghost" onClick={() => navigate('/')}>
             Home

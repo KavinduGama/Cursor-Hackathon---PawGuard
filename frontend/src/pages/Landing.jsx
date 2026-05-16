@@ -1,5 +1,13 @@
 import { useNavigate } from 'react-router-dom';
+import {
+  BrainIcon,
+  CameraPhoneIcon,
+  PawIcon,
+  PhoneIcon,
+  RescueIcon,
+} from '../components/AppIcons.jsx';
 import BottomNav from '../components/BottomNav.jsx';
+import MicIcon from '../components/MicIcon.jsx';
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -7,112 +15,100 @@ export default function Landing() {
   return (
     <div className="app-shell">
       <main className="page">
-        <header className="header-row">
-          <div>
-            <div className="greeting">Hi there 👋</div>
-          </div>
-          <div className="header-actions">
-            <button
-              className="icon-btn"
-              aria-label="Notifications"
-              onClick={() => {}}
-            >
-              🔔
-            </button>
-            <div className="avatar" aria-hidden>
-              P
-            </div>
+        <header className="brand-header" aria-label="PawGuard">
+          <span className="brand-logo" aria-hidden>
+            <PawIcon size={25} />
+          </span>
+          <div className="brand-copy">
+            <div className="brand-name">PawGuard</div>
+            <p className="brand-tagline">Animal rescue assistant</p>
           </div>
         </header>
 
-        <section className="hero">
-          <h1>
-            Let&apos;s make their <span className="accent">tomorrow better</span>
-          </h1>
-          <p className="sub">
-            Found an injured animal? PawGuard sees through your camera, talks
-            you through triage, and calls the nearest vet for you.
-          </p>
+        <section className="card hero-card-launch">
+          <div className="hero-card-body">
+            <h2>Help an animal in need</h2>
+            <p className="sub">
+              Talk to PawGuard and we&apos;ll route a vet or shelter to you.
+            </p>
+          </div>
+          <div className="hero-card-art" aria-hidden>
+            🐶🐱
+          </div>
         </section>
 
-        <div className="hero-illustration" aria-hidden>
-          🐶🐾🐱
-        </div>
+        <button
+          type="button"
+          className="card voice-teaser-card"
+          aria-label="Start a rescue session to talk to PawGuard"
+          onClick={() => navigate('/session', { state: { autoStart: true } })}
+        >
+          <span className="voice-teaser-btn" aria-hidden>
+            <MicIcon size={40} />
+          </span>
+          <p className="voice-teaser-title">
+            Tap to talk to <span className="accent-name">PawGuard</span>
+          </p>
+          <p className="voice-teaser-hint">
+            Voice starts live during a rescue — begin a session to connect.
+          </p>
+        </button>
+
+        <section className="card how-section stack">
+          <span className="how-label-pill">How it works</span>
+          <h3>Help in 3 simple steps</h3>
+          <div className="how-steps">
+            <div className="how-step">
+              <span className="how-step-icon" aria-hidden>
+                <CameraPhoneIcon size={24} />
+              </span>
+              <span className="how-step-num">1</span>
+              <h4>Show the animal</h4>
+              <p>Use your camera to show the animal in need.</p>
+            </div>
+            <span className="how-dash" aria-hidden>
+              ─
+            </span>
+            <div className="how-step">
+              <span className="how-step-icon" aria-hidden>
+                <BrainIcon size={24} />
+              </span>
+              <span className="how-step-num">2</span>
+              <h4>AI analyzes instantly</h4>
+              <p>Our AI checks the condition and tells you what&apos;s happening.</p>
+            </div>
+            <span className="how-dash" aria-hidden>
+              ─
+            </span>
+            <div className="how-step">
+              <span className="how-step-icon" aria-hidden>
+                <PhoneIcon size={24} />
+              </span>
+              <span className="how-step-num">3</span>
+              <h4>Help is contacted</h4>
+              <p>If it&apos;s serious, we call the nearest vet and keep you updated.</p>
+            </div>
+          </div>
+        </section>
 
         <button
           type="button"
           className="cta-card"
-          onClick={() => navigate('/session')}
+          onClick={() => navigate('/session', { state: { autoStart: true } })}
         >
-          <div>
-            <span className="label">Start now</span>
-            <span className="title">Begin a rescue</span>
-          </div>
+          <span className="cta-card-icon-circle" aria-hidden>
+            <RescueIcon size={24} />
+          </span>
+          <span className="cta-card-body">
+            <span className="title">Ready to save a life?</span>
+            <span className="cta-subtitle">
+              Every second matters. Let&apos;s make a difference together.
+            </span>
+          </span>
           <span className="arrow" aria-hidden>
             →
           </span>
         </button>
-
-        <div className="stats-card">
-          <div className="stat">
-            <span className="num">128</span>
-            <span className="lbl">Rescued</span>
-          </div>
-          <div className="stat">
-            <span className="num">56</span>
-            <span className="lbl">Volunteers</span>
-          </div>
-          <div className="stat">
-            <span className="num">320</span>
-            <span className="lbl">Clinics</span>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-title-row">
-            <span className="card-title">How PawGuard helps</span>
-          </div>
-          <div className="help-grid">
-            <button
-              className="help-tile"
-              type="button"
-              onClick={() => navigate('/session')}
-            >
-              <span className="tile-icon green">👁️</span>
-              <span className="tile-title">Live triage</span>
-              <span className="tile-sub">Gemini watches your camera</span>
-            </button>
-            <button className="help-tile" type="button">
-              <span className="tile-icon amber">🎙️</span>
-              <span className="tile-title">Voice vet</span>
-              <span className="tile-sub">ElevenLabs assistant</span>
-            </button>
-            <button className="help-tile" type="button">
-              <span className="tile-icon blue">📞</span>
-              <span className="tile-title">Auto-call</span>
-              <span className="tile-sub">Reach a clinic for you</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="card card-tinted">
-          <div className="row" style={{ gap: '0.75rem' }}>
-            <div
-              className="tile-icon green"
-              style={{ width: 36, height: 36, fontSize: '1.1rem' }}
-            >
-              💚
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                Every action saves a life
-              </div>
-              <div className="card-meta" style={{ marginTop: 2 }}>
-                Tap “Begin a rescue” to start — your camera does the rest.
-              </div>
-            </div>
-          </div>
-        </div>
       </main>
 
       <BottomNav />

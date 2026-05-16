@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCamera } from '../hooks/useCamera.js';
 import { useVisionLoop } from '../hooks/useVisionLoop.js';
 import { api } from '../lib/api.js';
@@ -10,6 +10,8 @@ import BottomNav from '../components/BottomNav.jsx';
 
 export default function Session() {
   const navigate = useNavigate();
+  const { state: routeState } = useLocation();
+  const autoStart = !!routeState?.autoStart;
   const [sessionId, setSessionId] = useState(null);
   const [bootError, setBootError] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(true);
@@ -98,7 +100,11 @@ export default function Session() {
         />
 
         {sessionId ? (
-          <VoiceAgent sessionId={sessionId} onCallResult={handleCallResult} />
+          <VoiceAgent
+            sessionId={sessionId}
+            autoStart={autoStart}
+            onCallResult={handleCallResult}
+          />
         ) : (
           <div className="card placeholder-text">Setting up your session…</div>
         )}

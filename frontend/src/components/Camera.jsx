@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import { CameraPhoneIcon } from './AppIcons.jsx';
 
 /**
  * Camera card — shows the live video stream inside a rounded card.
@@ -19,7 +20,7 @@ const Camera = forwardRef(function Camera(
     return (
       <div className="camera-closed">
         <div className="icon" aria-hidden>
-          📷
+          <CameraPhoneIcon size={26} />
         </div>
         <div>
           <div style={{ fontWeight: 700, color: 'var(--text)' }}>
@@ -30,7 +31,7 @@ const Camera = forwardRef(function Camera(
           </div>
         </div>
         <button className="btn btn-primary" type="button" onClick={onToggle}>
-          📷 Turn on camera
+          Turn on camera
         </button>
       </div>
     );

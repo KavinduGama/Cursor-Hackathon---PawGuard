@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'PawGuard AI',
         short_name: 'PawGuard',
         description: 'AI animal-rescue assistant',
-        theme_color: '#22a06b',
-        background_color: '#f6f8f5',
+        theme_color: '#149191',
+        background_color: '#f8fbfb',
         display: 'standalone',
         start_url: '/',
         icons: [

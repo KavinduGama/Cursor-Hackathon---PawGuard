@@ -1,13 +1,14 @@
-"""Auto-dial endpoints — combined "find nearest + call" in one shot.
+"""Auto-dial endpoints — find nearby places and start a sequential
+outbound-call loop in the background.
 
-The triage agent uses these instead of the two-step
-`find_nearby_vets` → `call_vet` pattern. Less round-tripping, no risk
-of the LLM losing the phone number between calls.
+The triage agent gets a `call_id` immediately; the frontend keeps polling
+`/api/calls/{call_id}/status` and pushes contextual updates into the live
+conversation as each attempt completes.
 """
 from __future__ import annotations
 
 import logging
-from typing import List, Literal, Optional
+from typing import List, Literal
 
 from fastapi import APIRouter
 
@@ -20,11 +21,8 @@ router = APIRouter(prefix="/api/auto-dial", tags=["auto-dial"])
 logger = logging.getLogger(__name__)
 
 
-def _first_callable(places: List[Place]) -> Optional[Place]:
-    for p in places:
-        if p.phone:
-            return p
-    return None
+def _callable_only(places: List[Place]) -> List[Place]:
+    return [p for p in places if p.phone]
 
 
 async def _auto_dial(
@@ -39,8 +37,8 @@ async def _auto_dial(
         )
         default_context = "Rescued animal needs temporary foster care"
 
-    target = _first_callable(places)
-    if target is None:
+    callable_places = _callable_only(places)
+    if not callable_places:
         logger.info(
             "auto-dial %s — no callable result near (%s, %s)",
             kind,
@@ -57,24 +55,23 @@ async def _auto_dial(
         )
 
     context = req.context or default_context
-    if kind == "vet":
-        record = await call_service.call_vet(
-            phone=target.phone or "",
-            context=context,
-            place_name=target.name,
-        )
-    else:
-        record = await call_service.call_foster(
-            phone=target.phone or "",
-            context=context,
-            place_name=target.name,
-        )
+    record = await call_service.call_until_available(
+        kind=kind,
+        places=callable_places,
+        context=context,
+    )
 
     return AutoDialResponse(
         call_id=record.call_id,
         status=record.status,
         agent_type=kind,
-        place=target,
+        place=callable_places[0],
+        total_attempts_planned=record.total_attempts_planned,
+        message=(
+            f"Started calling {len(callable_places)} {kind}(s) one by one. "
+            "Keep talking with the user — you'll get a system update the "
+            "moment any place answers or all calls are exhausted."
+        ),
     )
 
 

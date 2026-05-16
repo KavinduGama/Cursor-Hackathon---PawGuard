@@ -41,4 +41,8 @@ async def get_call_status(call_id: str) -> CallStatusResponse:
         available=record.available,
         wait_minutes=record.wait_minutes,
         notes=record.notes,
+        attempts=record.attempts or None,
+        successful_place=record.successful_place,
+        current_attempt_index=record.current_attempt_index,
+        total_attempts_planned=record.total_attempts_planned,
     )
