@@ -2,18 +2,20 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=str(_ENV_FILE), extra="ignore")
 
     # AI / voice / search providers
-    OPENAI_API_KEY: str = ""
-    OPENAI_VISION_MODEL: str = "gpt-4o"
-    OPENAI_CLASSIFIER_MODEL: str = "gpt-4o-mini"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_TRIAGE_AGENT_ID: str = ""
     ELEVENLABS_VET_AGENT_ID: str = ""

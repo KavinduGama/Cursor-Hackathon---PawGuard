@@ -403,7 +403,7 @@ class ElevenLabsCallService:
         # ── Tertiary fallback: cheap keyword heuristic on the summary ──────
         # Only used if BOTH dashboard structured output AND (later) the LLM
         # classifier give nothing. Keeps the demo working even without an
-        # OPENAI_API_KEY.
+        # GEMINI_API_KEY.
         if record.available is None:
             keyword_guess = _derive_available_from_summary(record.summary)
             if keyword_guess is not None:

@@ -1,4 +1,4 @@
-"""OpenAI-backed call-outcome classifier.
+"""Gemini-backed call-outcome classifier.
 
 Given the transcript summary of an outbound call to a vet clinic or foster,
 returns a strict JSON object describing the outcome — replacing the brittle
@@ -8,7 +8,7 @@ This is the *fallback* path: it only runs when the outbound agent did not
 already produce structured data (via ElevenLabs dashboard "Evaluation
 Criteria" / "Data Collection"), and only once per call.
 
-If OPENAI_API_KEY is missing or the call fails, returns None — callers
+If GEMINI_API_KEY is missing or the call fails, returns None — callers
 should gracefully fall back to whatever signal they already have.
 """
 from __future__ import annotations
@@ -18,13 +18,14 @@ import logging
 import re
 from typing import Literal, Optional, TypedDict
 
-from openai import AsyncOpenAI
+from google import genai
+from google.genai import types
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "gemini-2.5-flash"
 
 _SYSTEM_INSTRUCTION = """You analyze a brief transcript summary of an
 outbound phone call PawGuard (a pet-rescue dispatch system) just made to a
@@ -65,14 +66,14 @@ _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 class CallClassifier:
     def __init__(self) -> None:
         self._settings = get_settings()
-        self._client: Optional[AsyncOpenAI] = None
+        self._client: Optional[genai.Client] = None
 
-    def _get_client(self) -> Optional[AsyncOpenAI]:
+    def _get_client(self) -> Optional[genai.Client]:
         if self._client is not None:
             return self._client
-        if not self._settings.OPENAI_API_KEY:
+        if not self._settings.GEMINI_API_KEY:
             return None
-        self._client = AsyncOpenAI(api_key=self._settings.OPENAI_API_KEY)
+        self._client = genai.Client(api_key=self._settings.GEMINI_API_KEY)
         return self._client
 
     async def classify(
@@ -85,7 +86,7 @@ class CallClassifier:
         if client is None or not summary:
             return None
 
-        model_name = self._settings.OPENAI_CLASSIFIER_MODEL or DEFAULT_MODEL
+        model_name = self._settings.GEMINI_MODEL or DEFAULT_MODEL
         place_label = place_name or ("the clinic" if kind == "vet" else "the foster")
         prompt = (
             f"Call kind: {kind}\n"
@@ -94,17 +95,21 @@ class CallClassifier:
         )
 
         try:
-            resp = await client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_INSTRUCTION},
-                    {"role": "user", "content": prompt},
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.0,
-                max_tokens=300,
-            )
-            raw = resp.choices[0].message.content or ""
+            import asyncio
+
+            def _generate() -> str:
+                resp = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=_SYSTEM_INSTRUCTION,
+                        temperature=0.0,
+                        response_mime_type="application/json",
+                    ),
+                )
+                return resp.text or ""
+
+            raw = await asyncio.to_thread(_generate)
         except Exception as exc:  # noqa: BLE001
             logger.warning("call classifier request failed: %s", exc)
             return None
