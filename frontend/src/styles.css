@@ -313,7 +313,7 @@ a {
 }
 
 .landing-hero-art {
-  width: clamp(110px, 32vw, 150px);
+  width: clamp(125px, 36vw, 170px);
   flex-shrink: 0;
 }
 
