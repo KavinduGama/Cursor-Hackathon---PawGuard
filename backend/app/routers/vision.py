@@ -34,7 +34,7 @@ async def analyze_frame(req: FrameRequest) -> FrameResponse:
 
 @router.get("/observations/{session_id}", response_model=ObservationResponse)
 async def get_observations(session_id: str) -> ObservationResponse:
-    session = vision_service.get_session(session_id)
+    session = await vision_service.get_session_or_restore(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
     return ObservationResponse(
@@ -49,5 +49,5 @@ async def get_observations(session_id: str) -> ObservationResponse:
 
 @router.delete("/session/{session_id}")
 async def end_session(session_id: str) -> dict[str, str]:
-    vision_service.end_session(session_id)
+    await vision_service.end_session(session_id)
     return {"status": "ended"}

@@ -1,6 +1,6 @@
-"""Gemini-backed vision service.
+"""OpenAI-backed vision service.
 
-Maintains one chat session per session_id so Gemini carries memory across
+Maintains one conversation per session_id so the model carries memory across
 frames ("the swelling I noticed 30s ago is worse now"). The most recent
 analysis is cached so the voice agent can read it instantly.
 """
@@ -13,18 +13,16 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import List, Optional
 
-from google import genai
-from google.genai import types
+from openai import AsyncOpenAI
 
 from app.config import get_settings
+from app import db
 
 logger = logging.getLogger(__name__)
 
-# Multimodal model with 1M token context — great for many-frame sessions.
-# Default is gemini-2.5-flash (configurable via GEMINI_MODEL env var).
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gpt-4o"
 
 SYSTEM_INSTRUCTION = """You are PawGuard's vision module — a calm, expert
 animal-rescue triage assistant viewing live video frames from a phone camera.
@@ -53,107 +51,161 @@ Be concise. JSON only — no markdown, no prose."""
 @dataclass
 class VisionSession:
     session_id: str
-    chat: any  # google.genai chat session
+    messages: List[dict] = field(default_factory=list)
     latest_analysis: str = ""
     latest_severity: str = "UNKNOWN"
     frame_count: int = 0
+    created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
-class GeminiVisionService:
-    """In-process registry of vision sessions + Gemini calls."""
+class OpenAIVisionService:
+    """In-process registry of vision sessions + OpenAI calls."""
 
     def __init__(self) -> None:
         self._settings = get_settings()
         self._sessions: dict[str, VisionSession] = {}
-        self._client: Optional[genai.Client] = None
+        self._client: Optional[AsyncOpenAI] = None
 
-    # ── client lifecycle ─────────────────────────────────────────────────
-    def _get_client(self) -> genai.Client:
+    def _get_client(self) -> AsyncOpenAI:
         if self._client is None:
-            if not self._settings.GEMINI_API_KEY:
-                raise RuntimeError("GEMINI_API_KEY is not configured")
-            self._client = genai.Client(api_key=self._settings.GEMINI_API_KEY)
+            if not self._settings.OPENAI_API_KEY:
+                raise RuntimeError("OPENAI_API_KEY is not configured")
+            self._client = AsyncOpenAI(api_key=self._settings.OPENAI_API_KEY)
         return self._client
+
+    @property
+    def _model(self) -> str:
+        return self._settings.OPENAI_VISION_MODEL or DEFAULT_MODEL
 
     # ── session management ───────────────────────────────────────────────
     def start_session(self, session_id: Optional[str] = None) -> str:
         sid = session_id or str(uuid.uuid4())
-        client = self._get_client()
-        model_name = self._settings.GEMINI_MODEL or DEFAULT_MODEL
-        chat = client.chats.create(
-            model=model_name,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.2,
-                response_mime_type="application/json",
-            ),
+        now = time.time()
+        session = VisionSession(session_id=sid, created_at=now, updated_at=now)
+        self._sessions[sid] = session
+        asyncio.get_event_loop().create_task(
+            db.upsert_vision_session(
+                sid, session.latest_analysis, session.latest_severity,
+                session.frame_count, session.updated_at, session.created_at,
+            )
         )
-        self._sessions[sid] = VisionSession(session_id=sid, chat=chat)
-        logger.info("vision session started id=%s model=%s", sid, model_name)
+        logger.info("vision session started id=%s model=%s", sid, self._model)
         return sid
 
-    def end_session(self, session_id: str) -> None:
+    async def end_session(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
+        await db.delete_vision_session(session_id)
 
     def get_session(self, session_id: str) -> Optional[VisionSession]:
         return self._sessions.get(session_id)
+
+    async def get_session_or_restore(self, session_id: str) -> Optional[VisionSession]:
+        """Return from cache, or restore from DB if the backend restarted."""
+        session = self._sessions.get(session_id)
+        if session is not None:
+            return session
+        row = await db.load_vision_session(session_id)
+        if row is None:
+            return None
+        session = VisionSession(
+            session_id=session_id,
+            latest_analysis=row["analysis"],
+            latest_severity=row["severity"],
+            frame_count=row["frame_count"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+        self._sessions[session_id] = session
+        return session
 
     # ── frame analysis ───────────────────────────────────────────────────
     async def analyze_frame(self, session_id: str, frame_b64: str) -> VisionSession:
         session = self._sessions.get(session_id)
         if session is None:
-            # auto-create if frontend forgot to call /start
             sid = self.start_session(session_id)
             session = self._sessions[sid]
 
-        image_bytes = _decode_data_url(frame_b64)
+        b64_clean = _strip_data_url(frame_b64)
 
         async with session.lock:
-            prompt = (
+            prompt_text = (
                 "New frame. Analyze it. If you've seen previous frames in "
                 "this session, comment on changes_since_last."
             )
 
-            # google-genai's chat.send_message is sync — run in a thread so we
-            # don't block the FastAPI event loop while Gemini processes.
-            def _send() -> str:
-                resp = session.chat.send_message(
-                    [
-                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                        prompt,
-                    ]
-                )
-                return resp.text or ""
+            user_message = {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{b64_clean}",
+                            "detail": "low",
+                        },
+                    },
+                    {"type": "text", "text": prompt_text},
+                ],
+            }
+            session.messages.append(user_message)
+
+            # Trim conversation history to avoid token overflow.
+            # Keep the last 20 turns (10 user + 10 assistant).
+            if len(session.messages) > 20:
+                session.messages = session.messages[-20:]
+
+            messages = [
+                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                *session.messages,
+            ]
 
             try:
-                text = await asyncio.to_thread(_send)
+                client = self._get_client()
+                resp = await client.chat.completions.create(
+                    model=self._model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    temperature=0.2,
+                    max_tokens=500,
+                )
+                text = resp.choices[0].message.content or ""
             except Exception as exc:  # noqa: BLE001
-                logger.exception("gemini frame analysis failed: %s", exc)
+                logger.exception("OpenAI frame analysis failed: %s", exc)
                 text = (
                     '{"animal":"unknown","visible_injuries":[],"severity":"UNKNOWN",'
                     '"changes_since_last":"","guidance":"Hold camera steady",'
                     '"confidence":0.0}'
                 )
 
+            session.messages.append({"role": "assistant", "content": text.strip()})
+
             session.latest_analysis = text.strip()
             session.latest_severity = _extract_severity(text)
             session.frame_count += 1
             session.updated_at = time.time()
+
+            asyncio.get_event_loop().create_task(
+                db.upsert_vision_session(
+                    session.session_id,
+                    session.latest_analysis,
+                    session.latest_severity,
+                    session.frame_count,
+                    session.updated_at,
+                    session.created_at,
+                )
+            )
             return session
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-
 _DATA_URL_RE = re.compile(r"^data:image/[a-zA-Z]+;base64,")
 
 
-def _decode_data_url(frame: str) -> bytes:
-    """Accept either a raw base64 string or a data: URL."""
-    clean = _DATA_URL_RE.sub("", frame, count=1)
-    return base64.b64decode(clean)
+def _strip_data_url(frame: str) -> str:
+    """Return raw base64 whether the input is a data-URL or plain b64."""
+    return _DATA_URL_RE.sub("", frame, count=1)
 
 
 _SEVERITY_RE = re.compile(r'"severity"\s*:\s*"(CRITICAL|MODERATE|MILD|UNKNOWN)"')
@@ -164,5 +216,4 @@ def _extract_severity(text: str) -> str:
     return m.group(1) if m else "UNKNOWN"
 
 
-# Module-level singleton — imported by routers.
-vision_service = GeminiVisionService()
+vision_service = OpenAIVisionService()

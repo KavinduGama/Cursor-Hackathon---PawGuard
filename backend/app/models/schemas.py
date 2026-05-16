@@ -94,6 +94,8 @@ class CallAttemptSummary(BaseModel):
     status: str  # completed | failed
     available: Optional[bool] = None
     wait_minutes: Optional[int] = None
+    contact_name: Optional[str] = None
+    notes: Optional[str] = None
     summary: Optional[str] = None
 
 
@@ -104,6 +106,7 @@ class CallStatusResponse(BaseModel):
     summary: Optional[str] = None
     available: Optional[bool] = None
     wait_minutes: Optional[int] = None
+    contact_name: Optional[str] = None
     notes: Optional[str] = None
     # Loop-mode fields (populated when this call_id represents an
     # auto-dial sequential loop, not a single outbound call):
@@ -134,3 +137,17 @@ class AutoDialResponse(BaseModel):
     place: Optional[Place] = None
     message: Optional[str] = None
     total_attempts_planned: Optional[int] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dial-list (call a pre-selected list of places sequentially)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class DialListRequest(BaseModel):
+    kind: Literal["vet", "foster"] = "vet"
+    places: List[Place] = Field(
+        ..., min_length=1, description="Places to call, in order"
+    )
+    context: Optional[str] = None
+    session_id: Optional[str] = None

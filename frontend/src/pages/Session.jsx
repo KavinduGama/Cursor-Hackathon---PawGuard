@@ -47,9 +47,43 @@ export default function Session() {
     active: cameraOpen && cameraState.status === 'ready' && !!sessionId,
   });
 
-  const handleCallResult = useCallback((result) => {
+  const upsertCallResult = useCallback((result) => {
+    const existingIndex = callResultsRef.current.findIndex(
+      (r) => r.call_id && r.call_id === result.call_id
+    );
+    if (existingIndex >= 0) {
+      callResultsRef.current = callResultsRef.current.map((r, i) =>
+        i === existingIndex ? { ...r, ...result } : r
+      );
+      return;
+    }
     callResultsRef.current = [...callResultsRef.current, result];
   }, []);
+
+  const handleCallResult = useCallback(
+    (result) => {
+      upsertCallResult(result);
+    },
+    [upsertCallResult]
+  );
+
+  const handleCareArranged = useCallback(
+    (result) => {
+      upsertCallResult(result);
+      sessionStorage.setItem(
+        'pawguard:lastSession',
+        JSON.stringify({
+          sessionId,
+          observation,
+          callResults: callResultsRef.current,
+          arrangedResult: result,
+          endedAt: Date.now(),
+        })
+      );
+      navigate('/results', { replace: true });
+    },
+    [navigate, observation, sessionId, upsertCallResult]
+  );
 
   function exit() {
     sessionStorage.setItem(
@@ -104,6 +138,7 @@ export default function Session() {
             sessionId={sessionId}
             autoStart={autoStart}
             onCallResult={handleCallResult}
+            onCareArranged={handleCareArranged}
           />
         ) : (
           <div className="card placeholder-text">Setting up your session…</div>

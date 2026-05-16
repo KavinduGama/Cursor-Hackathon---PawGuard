@@ -1305,6 +1305,10 @@ a {
   gap: 0.25rem;
 }
 
+.call-card .map-directions-btn {
+  margin-top: 0.75rem;
+}
+
 /* Banners */
 .banner {
   padding: 0.75rem 1rem;

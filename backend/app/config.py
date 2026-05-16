@@ -11,9 +11,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # AI / voice / search providers
-    GEMINI_API_KEY: str = ""
-    # Stable Gemini model — override via env if you want 2.0-flash or 2.5-pro.
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    OPENAI_API_KEY: str = ""
+    OPENAI_VISION_MODEL: str = "gpt-4o"
+    OPENAI_CLASSIFIER_MODEL: str = "gpt-4o-mini"
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_TRIAGE_AGENT_ID: str = ""
     ELEVENLABS_VET_AGENT_ID: str = ""
@@ -21,9 +21,13 @@ class Settings(BaseSettings):
     ELEVENLABS_PHONE_NUMBER_ID: str = ""
     GOOGLE_PLACES_API_KEY: str = ""
 
-    # Mock vet override — when set, /api/location/vets returns a single fake
-    # clinic with this phone number (useful for testing the outbound call
-    # flow without spamming real vets).
+    # Demo call redirect — when set, all outbound calls dial this number
+    # instead of the real clinic phone. Google Places still returns real
+    # data (names, addresses, ratings) so the UI looks authentic.
+    DEMO_CALL_PHONE: str = ""
+
+    # Legacy mock vet override — replaces the entire Places search with a
+    # single fake clinic. Prefer DEMO_CALL_PHONE for demos.
     MOCK_VET_PHONE: str = ""
     MOCK_VET_NAME: str = "PetCare Veterinary Hospital — Nawala"
     MOCK_VET_ADDRESS: str = "47 Nawala Road, Nawala, Sri Lanka"

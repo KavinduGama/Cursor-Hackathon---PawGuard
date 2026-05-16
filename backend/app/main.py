@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.db import init_db
 from app.routers import auto_dial, calls, location, vision
 
 settings = get_settings()
@@ -16,10 +18,18 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await init_db()
+    yield
+
+
 app = FastAPI(
     title="PawGuard AI",
     description="AI animal-rescue assistant — vision, voice, and outbound calls.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

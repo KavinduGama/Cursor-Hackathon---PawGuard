@@ -50,6 +50,13 @@ export const api = {
       body: JSON.stringify({ lat, lng, context, session_id }),
     }),
 
+  /** Call a pre-selected list of places one by one (split-flow). */
+  dialList: ({ kind, places, context, session_id }) =>
+    jsonFetch('/api/calls/dial-list', {
+      method: 'POST',
+      body: JSON.stringify({ kind, places, context, session_id }),
+    }),
+
   getCallStatus: (callId) => jsonFetch(`/api/calls/${callId}/status`),
 };
 

@@ -5,6 +5,19 @@ export default function ResultCard({ result }) {
   const isVet = result.kind === 'vet';
   const label = isVet ? 'Vet clinic call' : 'Foster care call';
   const Icon = isVet ? ClinicIcon : HomeIcon;
+  const successfulPlace = result.successful_place || {};
+  const placeName = result.placeName || successfulPlace.name;
+  const placePhone = result.placePhone || successfulPlace.phone;
+  const placeAddress = result.placeAddress || successfulPlace.address;
+  const placeLat = result.placeLat ?? successfulPlace.lat;
+  const placeLng = result.placeLng ?? successfulPlace.lng;
+  const hasCoords = Number.isFinite(Number(placeLat)) && Number.isFinite(Number(placeLng));
+  const destination = hasCoords
+    ? `${placeLat},${placeLng}`
+    : placeAddress || placeName || '';
+  const mapUrl = destination
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`
+    : '';
 
   return (
     <article className={`card call-card ${isVet ? 'vet' : 'foster'}`}>
@@ -13,7 +26,7 @@ export default function ResultCard({ result }) {
       </div>
       <div className="body">
         <div className="row">
-          <span className="title">{result.placeName || 'Calling…'}</span>
+          <span className="title">{placeName || 'Calling…'}</span>
           <span className="spacer" />
           <span className={`status-badge ${status}`}>
             {status.replace('_', ' ')}
@@ -27,22 +40,33 @@ export default function ResultCard({ result }) {
           {result.available != null && (
             <span>{result.available ? '✓ Available' : '✗ Unavailable'}</span>
           )}
+          {result.contact_name && <span>{result.contact_name}</span>}
           {result.wait_minutes != null && (
             <span>~{result.wait_minutes} min</span>
           )}
-          {result.placePhone && (
+          {placePhone && (
             <span className="meta-with-icon">
               <PhoneIcon size={13} />
-              {result.placePhone}
+              {placePhone}
             </span>
           )}
-          {result.placeAddress && (
+          {placeAddress && (
             <span className="meta-with-icon">
               <MapPinIcon size={13} />
-              {result.placeAddress}
+              {placeAddress}
             </span>
           )}
         </div>
+        {mapUrl && result.available === true && (
+          <a
+            className="btn btn-primary btn-block map-directions-btn"
+            href={mapUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open directions in Google Maps
+          </a>
+        )}
       </div>
     </article>
   );

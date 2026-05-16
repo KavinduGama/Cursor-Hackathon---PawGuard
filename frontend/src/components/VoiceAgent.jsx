@@ -14,8 +14,10 @@ const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID || '';
  *
  *   - get_vision_analysis()
  *   - find_emergency_vet | find_emergency_vets | find_nearby_vets  → list vets (no dial)
- *   - auto_dial_vets({context?})       → non-blocking sequential loop
- *   - auto_dial_shelters({context?})   → non-blocking sequential loop
+ *   - auto_dial_vets({context?})       → combined find+call sequential loop
+ *   - auto_dial_shelters({context?})   → combined find+call sequential loop
+ *   - call_vets_sequentially({places, context?})     → call a pre-selected list
+ *   - call_shelters_sequentially({places, context?}) → call a pre-selected list
  *   - get_call_status({call_id})       → manual progress check (the watcher pushes
  *                                        contextual updates automatically, so the
  *                                        agent does NOT need to poll this).
@@ -30,7 +32,12 @@ const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID || '';
  * If the browser keeps asking for location: use HTTPS (or localhost), allow the
  * prompt once, OR set VITE_USE_DEMO_LOCATION=1 in frontend/.env to skip GPS entirely.
  */
-export default function VoiceAgent({ sessionId, autoStart = false, onCallResult }) {
+export default function VoiceAgent({
+  sessionId,
+  autoStart = false,
+  onCallResult,
+  onCareArranged,
+}) {
   const [status, setStatus] = useState('idle'); // idle | connecting | active | speaking
   const [error, setError] = useState(null);
 
@@ -41,6 +48,7 @@ export default function VoiceAgent({ sessionId, autoStart = false, onCallResult 
   const watchersRef = useRef(new Map());
   // Guards the one-shot auto-start when arriving from Landing.
   const autoStartedRef = useRef(false);
+  const autoExitTimerRef = useRef(null);
 
   const stopWatcher = useCallback((callId) => {
     const w = watchersRef.current.get(callId);
@@ -77,22 +85,26 @@ export default function VoiceAgent({ sessionId, autoStart = false, onCallResult 
           const data = await api.getCallStatus(callId);
           const attempts = Array.isArray(data.attempts) ? data.attempts : [];
 
-          // Announce any newly-completed attempts.
+          // Announce any newly-completed attempts. `available` is tri-state:
+          //   true  -> definitively available (push success update)
+          //   false -> definitively unavailable (push "trying next")
+          //   null  -> unknown — stay silent and let the terminal update speak
           for (let i = state.lastIndex + 1; i < attempts.length; i++) {
             const a = attempts[i];
-            if (a.available) {
+            if (a.available === true) {
               const wait =
                 a.wait_minutes != null ? `~${a.wait_minutes} min wait` : 'available';
+              const who = a.contact_name ? `${a.contact_name} at ` : '';
               pushToConversation(
                 [
                   `Auto-dial update (${kind}):`,
-                  `${a.place_name} confirmed availability — ${wait}.`,
-                  a.summary || '',
+                  `${who}${a.place_name} confirmed — ${wait}.`,
+                  a.notes || '',
                 ]
                   .join(' ')
                   .trim()
               );
-            } else {
+            } else if (a.available === false) {
               const reason = a.status === 'failed' ? 'call failed' : a.status;
               pushToConversation(
                 `Auto-dial update (${kind}): ${a.place_name} unavailable (${reason}). Trying next.`
@@ -104,17 +116,52 @@ export default function VoiceAgent({ sessionId, autoStart = false, onCallResult 
           // Terminal events.
           if (data.status === 'completed' && data.successful_place) {
             const sp = data.successful_place;
+            const who = data.contact_name ? `${data.contact_name} at ` : '';
+            const wait =
+              data.wait_minutes != null
+                ? `Estimated wait ~${data.wait_minutes} minutes.`
+                : '';
             pushToConversation(
               [
                 `Auto-dial finished (${kind}):`,
-                `success at ${sp.name}.`,
+                `${who}${sp.name} can take the animal.`,
+                wait,
                 sp.phone ? `Phone: ${sp.phone}.` : '',
                 sp.address ? `Address: ${sp.address}.` : '',
-                'Tell the user.',
+                data.notes || '',
               ]
                 .join(' ')
                 .trim()
             );
+            const arrangedResult = {
+              kind,
+              call_id: callId,
+              status: data.status,
+              available: true,
+              wait_minutes: data.wait_minutes,
+              contact_name: data.contact_name,
+              notes: data.notes,
+              summary: data.summary,
+              placeName: sp.name,
+              placePhone: sp.phone,
+              placeAddress: sp.address,
+              placeLat: sp.lat,
+              placeLng: sp.lng,
+            };
+            onCallResult?.(arrangedResult);
+
+            if (!autoExitTimerRef.current) {
+              autoExitTimerRef.current = setTimeout(async () => {
+                try {
+                  await conversationRef.current?.endSession?.();
+                } catch (err) {
+                  console.warn('[PawGuard] voice auto-end failed', err);
+                } finally {
+                  autoExitTimerRef.current = null;
+                  onCareArranged?.(arrangedResult);
+                }
+              }, 6000);
+            }
             state.terminal = true;
           } else if (data.status === 'exhausted' || data.status === 'failed') {
             pushToConversation(
@@ -137,7 +184,7 @@ export default function VoiceAgent({ sessionId, autoStart = false, onCallResult 
 
       state.timer = setTimeout(tick, 1000);
     },
-    [pushToConversation]
+    [onCallResult, onCareArranged, pushToConversation]
   );
 
   const clientTools = useMemo(() => {
@@ -260,6 +307,91 @@ export default function VoiceAgent({ sessionId, autoStart = false, onCallResult 
         }
       },
 
+      // ── Split-flow: call a pre-selected list without re-searching ─────
+      // The agent can call find_emergency_vet first, show the user the list,
+      // then invoke call_vets_sequentially with the places array it received.
+      call_vets_sequentially: async ({ places, context } = {}) => {
+        try {
+          if (!Array.isArray(places) || places.length === 0) {
+            return {
+              error: 'no_places',
+              details:
+                'Provide a "places" array (from find_emergency_vet results) to call.',
+            };
+          }
+          const data = await api.dialList({
+            kind: 'vet',
+            places,
+            context,
+            session_id: sessionId,
+          });
+          if (data.call_id) {
+            onCallResult?.({
+              kind: 'vet',
+              call_id: data.call_id,
+              status: data.status,
+              placeName: data.place?.name,
+              placePhone: data.place?.phone,
+              placeAddress: data.place?.address,
+            });
+            startWatcher(data.call_id, 'vet');
+          }
+          return {
+            status: data.status,
+            call_id: data.call_id,
+            total_attempts_planned: data.total_attempts_planned ?? null,
+            message:
+              "Started calling the listed vets one by one. You'll receive contextual updates automatically. Do NOT poll get_call_status.",
+          };
+        } catch (err) {
+          return {
+            error: 'call_vets_sequentially_failed',
+            details: String(err?.message || err),
+          };
+        }
+      },
+
+      call_shelters_sequentially: async ({ places, context } = {}) => {
+        try {
+          if (!Array.isArray(places) || places.length === 0) {
+            return {
+              error: 'no_places',
+              details:
+                'Provide a "places" array (from find results) to call.',
+            };
+          }
+          const data = await api.dialList({
+            kind: 'foster',
+            places,
+            context,
+            session_id: sessionId,
+          });
+          if (data.call_id) {
+            onCallResult?.({
+              kind: 'foster',
+              call_id: data.call_id,
+              status: data.status,
+              placeName: data.place?.name,
+              placePhone: data.place?.phone,
+              placeAddress: data.place?.address,
+            });
+            startWatcher(data.call_id, 'foster');
+          }
+          return {
+            status: data.status,
+            call_id: data.call_id,
+            total_attempts_planned: data.total_attempts_planned ?? null,
+            message:
+              "Started calling the listed shelters one by one. You'll receive contextual updates automatically. Do NOT poll get_call_status.",
+          };
+        } catch (err) {
+          return {
+            error: 'call_shelters_sequentially_failed',
+            details: String(err?.message || err),
+          };
+        }
+      },
+
       get_call_status: async ({ call_id }) => {
         try {
           return await api.getCallStatus(call_id);
@@ -344,6 +476,7 @@ export default function VoiceAgent({ sessionId, autoStart = false, onCallResult 
   // Clear all watchers on unmount so timers don't leak.
   useEffect(() => {
     return () => {
+      if (autoExitTimerRef.current) clearTimeout(autoExitTimerRef.current);
       stopAllWatchers();
     };
   }, [stopAllWatchers]);
