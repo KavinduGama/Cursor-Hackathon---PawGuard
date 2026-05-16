@@ -137,11 +137,11 @@ export function PawIcon({ size = 20 }) {
       fill="currentColor"
       aria-hidden
     >
-      <ellipse cx="12" cy="16" rx="4.4" ry="3.6" />
-      <ellipse cx="6.6" cy="10.6" rx="1.9" ry="2.3" />
-      <ellipse cx="17.4" cy="10.6" rx="1.9" ry="2.3" />
-      <ellipse cx="9.4" cy="6.4" rx="1.7" ry="2.1" />
-      <ellipse cx="14.6" cy="6.4" rx="1.7" ry="2.1" />
+      <ellipse cx="12" cy="16.2" rx="4.6" ry="3.8" />
+      <ellipse cx="5.6" cy="11" rx="1.9" ry="2.4" />
+      <ellipse cx="18.4" cy="11" rx="1.9" ry="2.4" />
+      <ellipse cx="9" cy="6.2" rx="1.7" ry="2.2" />
+      <ellipse cx="15" cy="6.2" rx="1.7" ry="2.2" />
     </svg>
   );
 }
