@@ -18,6 +18,9 @@ export function useCamera({ facingMode = 'environment', enabled = true } = {}) {
       return undefined;
     }
     let cancelled = false;
+    let videoEl = null;
+    /** Removes video listeners + sized poll guard. */
+    let teardownCameraSetup = null;
 
     async function start() {
       setState({ status: 'starting', error: null });
@@ -35,13 +38,70 @@ export function useCamera({ facingMode = 'environment', enabled = true } = {}) {
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.muted = true;
-          videoRef.current.playsInline = true;
-          await videoRef.current.play().catch(() => {});
+        videoEl = videoRef.current;
+        if (!videoEl) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+          setState({
+            status: 'error',
+            error: 'Video element not mounted — reload the session.',
+          });
+          return;
         }
-        setState({ status: 'ready', error: null });
+
+        let sizedPollId = null;
+
+        const tryReady = () => {
+          if (cancelled || !videoEl) return;
+          const w = videoEl.videoWidth;
+          const h = videoEl.videoHeight;
+          if (w && h) {
+            if (sizedPollId != null) {
+              clearInterval(sizedPollId);
+              sizedPollId = null;
+            }
+            setState({ status: 'ready', error: null });
+          }
+        };
+
+        videoEl.srcObject = stream;
+        videoEl.muted = true;
+        videoEl.playsInline = true;
+
+        /** Safari/WebKit reports 0×0 until loadedmetadata / playing / resize. */
+        const onSized = () => tryReady();
+
+        videoEl.addEventListener('loadedmetadata', onSized);
+        videoEl.addEventListener('resize', onSized);
+        videoEl.addEventListener('playing', onSized);
+        videoEl.addEventListener('loadeddata', onSized);
+
+        /** Some WebKit builds miss sizing events — poll until dims appear. */
+        sizedPollId = setInterval(() => tryReady(), 200);
+
+        teardownCameraSetup = () => {
+          if (videoEl) {
+            videoEl.removeEventListener('loadedmetadata', onSized);
+            videoEl.removeEventListener('resize', onSized);
+            videoEl.removeEventListener('playing', onSized);
+            videoEl.removeEventListener('loadeddata', onSized);
+          }
+          if (sizedPollId != null) {
+            clearInterval(sizedPollId);
+            sizedPollId = null;
+          }
+          teardownCameraSetup = null;
+        };
+
+        await videoEl.play().catch(() => {});
+        if (cancelled) return;
+
+        tryReady();
+
+        /** Ref may populate one frame later (strict mode / mount edge). */
+        requestAnimationFrame(() => {
+          if (!cancelled) tryReady();
+        });
       } catch (err) {
         const isDenied =
           err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError';
@@ -55,6 +115,8 @@ export function useCamera({ facingMode = 'environment', enabled = true } = {}) {
     start();
     return () => {
       cancelled = true;
+      if (teardownCameraSetup) teardownCameraSetup();
+      videoEl = null;
       const stream = streamRef.current;
       if (stream) stream.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -64,10 +126,17 @@ export function useCamera({ facingMode = 'environment', enabled = true } = {}) {
   // Stable across renders so consumers can safely list it in effect deps.
   const captureFrame = useCallback((quality = 0.65) => {
     const video = videoRef.current;
-    if (!video || video.readyState < 2) return null;
+    if (!video) return null;
     const w = video.videoWidth;
     const h = video.videoHeight;
     if (!w || !h) return null;
+
+    /*
+     * tryReady gates on dims only; Safari often keeps readyState === HAVE_METADATA
+     * longer than Blink while pixels are already drawable — requiring >= CURRENT_DATA
+     * made every capture return null forever.
+     */
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) return null;
 
     // Downscale large frames so uploads stay fast on mobile networks.
     const maxDim = 720;

@@ -17,6 +17,19 @@ function Svg({ size = 20, children, strokeWidth = 1.9 }) {
   );
 }
 
+/** Microphone with slash — user mic muted during voice session */
+export function MicMutedIcon({ size = 22, strokeWidth: sw = 2 }) {
+  return (
+    <Svg size={size} strokeWidth={sw}>
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" x2="12" y1="19" y2="23" />
+      <line x1="8" x2="16" y1="23" y2="23" />
+      <line x1="2" x2="22" y1="22" y2="2" />
+    </Svg>
+  );
+}
+
 export function MenuIcon({ size = 22, strokeWidth: sw = 2 }) {
   return (
     <Svg size={size} strokeWidth={sw}>

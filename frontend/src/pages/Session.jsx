@@ -16,6 +16,8 @@ export default function Session() {
   const [bootError, setBootError] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(true);
   const callResultsRef = useRef([]);
+  const voiceApiRef = useRef(null);
+  const [directionsBanner, setDirectionsBanner] = useState(null);
 
   const { videoRef, state: cameraState, captureFrame } = useCamera({
     facingMode: 'environment',
@@ -67,23 +69,38 @@ export default function Session() {
     [upsertCallResult]
   );
 
-  const handleCareArranged = useCallback(
-    (result) => {
-      upsertCallResult(result);
+  const persistSessionAndGoResults = useCallback(
+    (arrangedOverride = null) => {
       sessionStorage.setItem(
         'pawguard:lastSession',
         JSON.stringify({
           sessionId,
           observation,
           callResults: callResultsRef.current,
-          arrangedResult: result,
+          arrangedResult: arrangedOverride,
           endedAt: Date.now(),
         })
       );
       navigate('/results', { replace: true });
+      setDirectionsBanner(null);
     },
-    [navigate, observation, sessionId, upsertCallResult]
+    [navigate, observation, sessionId]
   );
+
+  const handleDirectionsReady = useCallback((result) => {
+    setDirectionsBanner(result || null);
+  }, []);
+
+  const handleContinueDirections = useCallback(async () => {
+    if (!directionsBanner) return;
+    try {
+      await voiceApiRef.current?.endSession?.();
+    } catch (err) {
+      console.warn('[PawGuard] end voice session', err);
+    } finally {
+      persistSessionAndGoResults(directionsBanner);
+    }
+  }, [directionsBanner, persistSessionAndGoResults]);
 
   function exit() {
     sessionStorage.setItem(
@@ -133,12 +150,31 @@ export default function Session() {
           cameraOpen={cameraOpen}
         />
 
+        {directionsBanner && (
+          <div className="banner info" role="status">
+            <div style={{ fontWeight: 700, marginBottom: '0.35rem' }}>
+              Care arranged — {directionsBanner.placeName || 'open directions when ready'}
+            </div>
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.9rem', opacity: 0.92 }}>
+              End the spoken summary whenever you&apos;re ready, then tap below for the map.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              onClick={handleContinueDirections}
+            >
+              Continue to map &amp; directions
+            </button>
+          </div>
+        )}
+
         {sessionId ? (
           <VoiceAgent
             sessionId={sessionId}
             autoStart={autoStart}
             onCallResult={handleCallResult}
-            onCareArranged={handleCareArranged}
+            onDirectionsReady={handleDirectionsReady}
+            voiceApiRef={voiceApiRef}
           />
         ) : (
           <div className="card placeholder-text">Setting up your session…</div>

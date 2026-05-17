@@ -3,6 +3,7 @@ import { useConversation } from '@elevenlabs/react';
 import { api } from '../lib/api.js';
 import { resolveLatLngForTools, safeParseAnalysis } from '../lib/geo.js';
 import MicIcon from './MicIcon.jsx';
+import { MicMutedIcon } from './AppIcons.jsx';
 
 const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID || '';
 
@@ -32,15 +33,23 @@ const AGENT_ID = import.meta.env.VITE_ELEVENLABS_AGENT_ID || '';
  *
  * If the browser keeps asking for location: use HTTPS (or localhost), allow the
  * prompt once, OR set VITE_USE_DEMO_LOCATION=1 in frontend/.env to skip GPS entirely.
+ *
+ * When auto-dial finds a confirming place: parent gets `onDirectionsReady` — the voice
+ * session stays active until the user taps “Continue”; parent calls `voiceApiRef.endSession()`.
  */
 export default function VoiceAgent({
   sessionId,
   autoStart = false,
   onCallResult,
-  onCareArranged,
+  /** Fired once outbound auto-dial succeeds — parent shows a Continue button / map flow. */
+  onDirectionsReady,
+  /** `{ current: { endSession: async () => void } | null }` — wired when session is ready. */
+  voiceApiRef,
 }) {
   const [status, setStatus] = useState('idle'); // idle | connecting | active | speaking
   const [error, setError] = useState(null);
+  /** Controlled mic mute — synced to ElevenLabs via `micMuted` on useConversation */
+  const [micMuted, setMicMuted] = useState(false);
 
   // Ref to the live conversation object so watcher closures always see the
   // latest one without re-running their setTimeout chain.
@@ -49,7 +58,6 @@ export default function VoiceAgent({
   const watchersRef = useRef(new Map());
   // Guards the one-shot auto-start when arriving from Landing.
   const autoStartedRef = useRef(false);
-  const autoExitTimerRef = useRef(null);
 
   const stopWatcher = useCallback((callId) => {
     const w = watchersRef.current.get(callId);
@@ -132,6 +140,8 @@ export default function VoiceAgent({
                 sp.phone ? `Phone: ${sp.phone}.` : '',
                 sp.address ? `Address: ${sp.address}.` : '',
                 data.notes || '',
+                'Give a short verbal wrap-up—who/when/next steps—only.',
+                'Do NOT mention maps, links, or tapping the screen for directions; PawGuard will offer a Directions button.',
               ]
                 .join(' ')
                 .trim()
@@ -152,19 +162,8 @@ export default function VoiceAgent({
               placeLng: sp.lng,
             };
             onCallResult?.(arrangedResult);
+            onDirectionsReady?.(arrangedResult);
 
-            if (!autoExitTimerRef.current) {
-              autoExitTimerRef.current = setTimeout(async () => {
-                try {
-                  await conversationRef.current?.endSession?.();
-                } catch (err) {
-                  console.warn('[PawGuard] voice auto-end failed', err);
-                } finally {
-                  autoExitTimerRef.current = null;
-                  onCareArranged?.(arrangedResult);
-                }
-              }, 6000);
-            }
             state.terminal = true;
           } else if (data.status === 'exhausted' || data.status === 'failed') {
             pushToConversation(
@@ -187,7 +186,7 @@ export default function VoiceAgent({
 
       state.timer = setTimeout(tick, 1000);
     },
-    [onCallResult, onCareArranged, pushToConversation]
+    [onCallResult, onDirectionsReady, pushToConversation]
   );
 
   const clientTools = useMemo(() => {
@@ -290,7 +289,7 @@ export default function VoiceAgent({
             location_source: loc.source,
             ...(loc.note ? { location_note: loc.note } : {}),
             message:
-              "Started calling vets one by one in the background. Keep the conversation going with the user — you'll receive a [SYSTEM UPDATE] message the moment any clinic answers or all calls are exhausted. Summarise it naturally when it arrives. Do NOT poll get_call_status.",
+              "Started calling vets one by one in the background. Keep talking with the user — [SYSTEM UPDATE] messages arrive automatically. Summarise them naturally when they arrive. When a vet confirms availability, give a concise verbal recap only — do NOT tell the user where to tap or open maps; they will tap a Directions button after you wrap up. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return { error: 'auto_dial_vet_failed', details: String(err?.message || err) };
@@ -324,7 +323,7 @@ export default function VoiceAgent({
             location_source: loc.source,
             ...(loc.note ? { location_note: loc.note } : {}),
             message:
-              "Started calling foster/shelters one by one in the background. Keep the conversation going with the user — you'll receive a [SYSTEM UPDATE] message the moment any place answers or all calls are exhausted. Summarise it naturally when it arrives. Do NOT poll get_call_status.",
+              "Started calling foster/shelters one by one in the background. Keep talking — [SYSTEM UPDATE] messages arrive automatically; summarise naturally. When a place confirms availability, verbal recap only — do NOT mention maps/links/taps on screen; a Directions button appears for the user afterward. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return { error: 'auto_dial_shelter_failed', details: String(err?.message || err) };
@@ -365,7 +364,7 @@ export default function VoiceAgent({
             call_id: data.call_id,
             total_attempts_planned: data.total_attempts_planned ?? null,
             message:
-              "Started calling the listed vets one by one. You'll receive [SYSTEM UPDATE] messages automatically. Summarise them naturally. Do NOT poll get_call_status.",
+              "Started calling the listed vets one by one. You'll receive [SYSTEM UPDATE] messages automatically — summarise naturally. On success give a verbal wrap-up only; do not cue maps/screens; user gets a Directions button. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return {
@@ -406,7 +405,7 @@ export default function VoiceAgent({
             call_id: data.call_id,
             total_attempts_planned: data.total_attempts_planned ?? null,
             message:
-              "Started calling the listed shelters one by one. You'll receive [SYSTEM UPDATE] messages automatically. Summarise them naturally. Do NOT poll get_call_status.",
+              "Started calling the listed shelters one by one. [SYSTEM UPDATE] messages arrive automatically — summarise naturally. Success: verbal recap only; no maps/taps cues; Directions button handles next. Do NOT poll get_call_status.",
           };
         } catch (err) {
           return {
@@ -427,6 +426,7 @@ export default function VoiceAgent({
   }, [sessionId, onCallResult, startWatcher]);
 
   const conversation = useConversation({
+    micMuted,
     clientTools,
     onUnhandledClientToolCall: (call) => {
       console.warn(
@@ -436,7 +436,10 @@ export default function VoiceAgent({
       );
     },
     onConnect: () => setStatus('active'),
-    onDisconnect: () => setStatus('idle'),
+    onDisconnect: () => {
+      setMicMuted(false);
+      setStatus('idle');
+    },
     onError: (e) => {
       console.error('voice agent error', e);
       setError(e?.message || 'Voice agent error');
@@ -460,6 +463,7 @@ export default function VoiceAgent({
     }
     setError(null);
     setStatus('connecting');
+    setMicMuted(false);
     try {
       await navigator.mediaDevices.getUserMedia({ audio: true });
       await conversation.startSession({
@@ -478,9 +482,22 @@ export default function VoiceAgent({
     try {
       await conversation.endSession();
     } finally {
+      setMicMuted(false);
       setStatus('idle');
     }
   }, [conversation, stopAllWatchers]);
+
+  useEffect(() => {
+    if (!voiceApiRef) return undefined;
+    voiceApiRef.current = {
+      endSession: async () => {
+        await stop();
+      },
+    };
+    return () => {
+      voiceApiRef.current = null;
+    };
+  }, [voiceApiRef, stop]);
 
   // One-shot auto-start when arriving from Landing with `autoStart` route state.
   useEffect(() => {
@@ -499,10 +516,7 @@ export default function VoiceAgent({
 
   // Clear all watchers on unmount so timers don't leak.
   useEffect(() => {
-    return () => {
-      if (autoExitTimerRef.current) clearTimeout(autoExitTimerRef.current);
-      stopAllWatchers();
-    };
+    return () => stopAllWatchers();
   }, [stopAllWatchers]);
 
   const isActive = status === 'active' || status === 'speaking';
@@ -519,8 +533,10 @@ export default function VoiceAgent({
     title = 'PawGuard is speaking';
     subtitle = 'Listen up — tap to interrupt.';
   } else if (status === 'active') {
-    title = 'Listening…';
-    subtitle = 'Describe what you see. Tap to end.';
+    title = micMuted ? 'Muted' : 'Listening…';
+    subtitle = micMuted
+      ? 'Your mic is off — unmute anytime. Agent can still speak.'
+      : 'Describe what you see. Tap to end.';
   } else {
     title = '';
     subtitle = '';
@@ -530,23 +546,40 @@ export default function VoiceAgent({
 
   return (
     <section className="card voice-card voice-card--center" aria-live="polite">
-      <button
-        type="button"
-        onClick={isActive ? stop : start}
-        className={`voice-btn ${isActive ? 'active' : ''} ${
-          status === 'speaking' ? 'speaking' : ''
-        }`}
-        aria-label={isActive ? 'End conversation' : 'Start conversation'}
-      >
-        <span className="ring" />
+      <div className="voice-controls-row">
+        <button
+          type="button"
+          onClick={isActive ? stop : start}
+          className={`voice-btn ${isActive ? 'active' : ''} ${
+            status === 'speaking' ? 'speaking' : ''
+          }`}
+          aria-label={isActive ? 'End conversation' : 'Start conversation'}
+        >
+          <span className="ring" />
+          {isActive ? (
+            <span className="mic-icon mic-icon-stop" aria-hidden />
+          ) : (
+            <span className="mic-icon">
+              <MicIcon size={34} />
+            </span>
+          )}
+        </button>
         {isActive ? (
-          <span className="mic-icon mic-icon-stop" aria-hidden />
-        ) : (
-          <span className="mic-icon">
-            <MicIcon size={34} />
-          </span>
-        )}
-      </button>
+          <button
+            type="button"
+            className={`voice-mute-btn ${micMuted ? 'muted' : ''}`}
+            onClick={() => setMicMuted((m) => !m)}
+            aria-pressed={micMuted}
+            aria-label={micMuted ? 'Unmute microphone' : 'Mute microphone'}
+            title={micMuted ? 'Unmute mic' : 'Mute mic'}
+          >
+            <span className="voice-mute-inner" aria-hidden>
+              {micMuted ? <MicMutedIcon size={24} strokeWidth={2} /> : <MicIcon size={24} />}
+            </span>
+            <span className="voice-mute-label">{micMuted ? 'Unmute' : 'Mute'}</span>
+          </button>
+        ) : null}
+      </div>
       <div className="voice-info">
         {showIdleHero ? (
           <>
