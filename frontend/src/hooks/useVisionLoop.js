@@ -9,6 +9,9 @@ import { safeParseAnalysis } from '../lib/geo.js';
  *
  * The loop is fire-and-forget so a slow Gemini call never blocks the UI.
  *
+ * Tracks consecutive errors so the parent can show a visible warning when
+ * the vision pipeline is down (rather than silently freezing).
+ *
  * NOTE: `captureFrame` is stashed in a ref so a fresh function identity from
  * the parent doesn't tear down the intervals on every render. Only
  * `sessionId` and `active` should restart the loop.
@@ -22,10 +25,13 @@ export function useVisionLoop({
 }) {
   const [observation, setObservation] = useState(null);
   const [frameCount, setFrameCount] = useState(0);
+  /** Number of consecutive frame-analysis failures. */
+  const [visionError, setVisionError] = useState(null);
   const inflightRef = useRef(false);
   const captureRef = useRef(captureFrame);
   const captureIntervalRef = useRef(captureInterval);
   const pollIntervalRef = useRef(pollInterval);
+  const consecutiveFailRef = useRef(0);
 
   useEffect(() => {
     captureRef.current = captureFrame;
@@ -39,6 +45,10 @@ export function useVisionLoop({
   useEffect(() => {
     if (!sessionId || !active) return undefined;
 
+    // Reset error state when loop restarts.
+    setVisionError(null);
+    consecutiveFailRef.current = 0;
+
     const captureId = setInterval(async () => {
       if (inflightRef.current) return;
       const grab = captureRef.current;
@@ -46,8 +56,21 @@ export function useVisionLoop({
       if (!frame) return;
       inflightRef.current = true;
       try {
-        await api.analyzeFrame(sessionId, frame);
+        const res = await api.analyzeFrame(sessionId, frame);
+        if (res && res.ok) {
+          consecutiveFailRef.current = 0;
+          setVisionError(null);
+        } else {
+          consecutiveFailRef.current += 1;
+          if (consecutiveFailRef.current >= 3) {
+            setVisionError(`Vision paused — backend returned ${res?.status || 'error'}`);
+          }
+        }
       } catch (err) {
+        consecutiveFailRef.current += 1;
+        if (consecutiveFailRef.current >= 3) {
+          setVisionError('Vision paused — connection lost. Retrying…');
+        }
         console.warn('analyzeFrame failed:', err);
       } finally {
         inflightRef.current = false;
@@ -76,5 +99,5 @@ export function useVisionLoop({
     };
   }, [sessionId, active]);
 
-  return { observation, frameCount };
+  return { observation, frameCount, visionError };
 }

@@ -151,6 +151,7 @@ class ElevenLabsCallService:
     def __init__(self) -> None:
         self._settings = get_settings()
         self._calls: dict[str, CallRecord] = {}
+        self._client = httpx.AsyncClient(timeout=15.0)
 
     async def _persist(self, record: CallRecord) -> None:
         """Fire-and-forget save of a call record to SQLite."""
@@ -315,19 +316,18 @@ class ElevenLabsCallService:
         headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(
-                    f"{API_BASE}/convai/twilio/outbound-call",
-                    json=payload,
-                    headers=headers,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                record.conversation_id = data.get("conversation_id") or data.get(
-                    "callSid"
-                )
-                record.status = "in_progress"
-                record.raw = data
+            resp = await self._client.post(
+                f"{API_BASE}/convai/twilio/outbound-call",
+                json=payload,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            record.conversation_id = data.get("conversation_id") or data.get(
+                "callSid"
+            )
+            record.status = "in_progress"
+            record.raw = data
         except Exception as exc:  # noqa: BLE001
             logger.exception("outbound call failed: %s", exc)
             record.status = "failed"
@@ -343,10 +343,9 @@ class ElevenLabsCallService:
         url = f"{API_BASE}/convai/conversations/{record.conversation_id}"
         headers = {"xi-api-key": api_key}
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(url, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
+            resp = await self._client.get(url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
         except Exception as exc:  # noqa: BLE001
             logger.warning("status refresh failed: %s", exc)
             return
@@ -599,19 +598,18 @@ class ElevenLabsCallService:
         headers = {"xi-api-key": api_key, "Content-Type": "application/json"}
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(
-                    f"{API_BASE}/convai/twilio/outbound-call",
-                    json=payload,
-                    headers=headers,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                record.conversation_id = data.get("conversation_id") or data.get(
-                    "callSid"
-                )
-                record.status = "in_progress"
-                record.raw = data
+            resp = await self._client.post(
+                f"{API_BASE}/convai/twilio/outbound-call",
+                json=payload,
+                headers=headers,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            record.conversation_id = data.get("conversation_id") or data.get(
+                "callSid"
+            )
+            record.status = "in_progress"
+            record.raw = data
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop outbound call failed: %s", exc)
             record.status = "failed"
@@ -638,6 +636,20 @@ async def _simulate_call(record: CallRecord, place_name: Optional[str]) -> None:
             f"{place_name or 'Happy Paws Foster'} can take the animal. They can "
             "arrange pickup in about 30 minutes."
         )
+    record.updated_at = time.time()
+    try:
+        await db.upsert_call_record(
+            call_id=record.call_id,
+            agent_type=record.agent_type,
+            status=record.status,
+            summary=record.summary,
+            available=record.available,
+            wait_minutes=record.wait_minutes,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("failed to persist simulated call %s: %s", record.call_id, exc)
 
 
 async def _simulate_loop_call(
@@ -669,13 +681,27 @@ async def _simulate_loop_call(
                 f"{place_name or 'Happy Paws Foster'} can take the animal. "
                 "Pickup in around 30 minutes."
             )
-        return
-
-    record.available = False
-    if loop_index == 0:
-        record.summary = f"No answer at {place_name or 'the clinic'}."
     else:
-        record.summary = f"{place_name or 'the clinic'} is closed right now."
+        record.available = False
+        if loop_index == 0:
+            record.summary = f"No answer at {place_name or 'the clinic'}."
+        else:
+            record.summary = f"{place_name or 'the clinic'} is closed right now."
+
+    record.updated_at = time.time()
+    try:
+        await db.upsert_call_record(
+            call_id=record.call_id,
+            agent_type=record.agent_type,
+            status=record.status,
+            summary=record.summary,
+            available=record.available,
+            wait_minutes=record.wait_minutes,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("failed to persist simulated loop call %s: %s", record.call_id, exc)
 
 
 call_service = ElevenLabsCallService()

@@ -30,6 +30,7 @@ FIELD_MASK = (
 class PlacesService:
     def __init__(self) -> None:
         self._settings = get_settings()
+        self._client = httpx.AsyncClient(timeout=10.0)
 
     @property
     def api_key(self) -> str:
@@ -111,10 +112,9 @@ class PlacesService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(PLACES_URL, json=body, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
+            resp = await self._client.post(PLACES_URL, json=body, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
         except Exception as exc:  # noqa: BLE001
             logger.exception("places search failed: %s", exc)
             return _demo_places(lat, lng, included_types[0])

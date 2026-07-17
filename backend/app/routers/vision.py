@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/vision", tags=["vision"])
 
 @router.post("/session/start", response_model=StartSessionResponse)
 async def start_session(req: StartSessionRequest) -> StartSessionResponse:
-    sid = vision_service.start_session(req.session_id)
+    sid = await vision_service.start_session(req.session_id)
     return StartSessionResponse(session_id=sid)
 
 

@@ -223,9 +223,64 @@ export default function Results() {
             >
               Calls placed
             </div>
-            {results.map((r) => (
-              <ResultCard key={r.call_id || Math.random()} result={r} />
-            ))}
+            {results.map((r) => {
+              const attempts = r.attempts || [];
+              if (attempts.length > 1) {
+                // Auto-dial timeline: show each attempt with status
+                return (
+                  <div key={r.call_id || Math.random()} className="card">
+                    <div className="card-title-row">
+                      <span className="card-title">
+                        Auto-dial — {r.kind === 'vet' ? 'Vet clinics' : 'Foster care'}
+                      </span>
+                      <span className={`status-badge ${(r.status || '').toLowerCase()}`}>
+                        {(r.status || 'in progress').replace('_', ' ')}
+                      </span>
+                    </div>
+                    <div className="autodial-timeline">
+                      {attempts.map((a, i) => (
+                        <div
+                          key={i}
+                          className={`autodial-step ${a.available === true ? 'success' : a.available === false ? 'fail' : 'pending'}`}
+                        >
+                          <span className="autodial-marker">
+                            {a.available === true ? '✓' : a.available === false ? '✗' : '…'}
+                          </span>
+                          <div className="autodial-step-body">
+                            <span className="autodial-place">{a.place_name}</span>
+                            <span className="autodial-note">
+                              {a.available === true
+                                ? a.wait_minutes
+                                  ? `Available — ~${a.wait_minutes} min wait`
+                                  : 'Available'
+                                : a.status === 'failed'
+                                ? 'Call failed'
+                                : a.summary || 'Unavailable'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {r.successful_place && (
+                      <a
+                        className="btn btn-primary btn-block map-directions-btn"
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+                          r.successful_place.lat && r.successful_place.lng
+                            ? `${r.successful_place.lat},${r.successful_place.lng}`
+                            : r.successful_place.address || r.successful_place.name || ''
+                        )}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ marginTop: '0.75rem' }}
+                      >
+                        Open directions in Google Maps
+                      </a>
+                    )}
+                  </div>
+                );
+              }
+              return <ResultCard key={r.call_id || Math.random()} result={r} />;
+            })}
           </div>
         )}
 

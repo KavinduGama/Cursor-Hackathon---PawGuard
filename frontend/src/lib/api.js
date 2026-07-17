@@ -25,6 +25,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, frame: frameDataUrl }),
       keepalive: true,
+    }).then((res) => {
+      if (!res.ok) {
+        console.warn(`[PawGuard] analyzeFrame failed: ${res.status}`);
+      }
+      return res;
     }),
 
   getObservations: (sessionId) =>

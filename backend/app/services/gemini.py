@@ -82,7 +82,7 @@ class GeminiVisionService:
         return self._settings.GEMINI_MODEL or DEFAULT_MODEL
 
     # ── session management ───────────────────────────────────────────────
-    def start_session(self, session_id: Optional[str] = None) -> str:
+    async def start_session(self, session_id: Optional[str] = None) -> str:
         sid = session_id or str(uuid.uuid4())
         client = self._get_client()
         chat = client.chats.create(
@@ -97,9 +97,7 @@ class GeminiVisionService:
         self._sessions[sid] = VisionSession(
             session_id=sid, chat=chat, created_at=now, updated_at=now,
         )
-        asyncio.get_event_loop().create_task(
-            db.upsert_vision_session(sid, "", "UNKNOWN", 0, now, now)
-        )
+        await db.upsert_vision_session(sid, "", "UNKNOWN", 0, now, now)
         logger.info("vision session started id=%s model=%s", sid, self._model)
         return sid
 
@@ -139,7 +137,7 @@ class GeminiVisionService:
     async def analyze_frame(self, session_id: str, frame_b64: str) -> VisionSession:
         session = self._sessions.get(session_id)
         if session is None:
-            sid = self.start_session(session_id)
+            sid = await self.start_session(session_id)
             session = self._sessions[sid]
 
         if session.chat is None:
@@ -170,10 +168,32 @@ class GeminiVisionService:
                 )
                 return resp.text or ""
 
-            try:
-                text = await asyncio.to_thread(_send)
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Gemini frame analysis failed: %s", exc)
+            _GEMINI_TIMEOUT_S = 30
+            _MAX_RETRIES = 1
+            text = None
+
+            for attempt in range(_MAX_RETRIES + 1):
+                try:
+                    text = await asyncio.wait_for(
+                        asyncio.to_thread(_send),
+                        timeout=_GEMINI_TIMEOUT_S,
+                    )
+                    break  # success
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Gemini frame analysis timed out after %ds (attempt %d/%d)",
+                        _GEMINI_TIMEOUT_S, attempt + 1, _MAX_RETRIES + 1,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Gemini frame analysis failed (attempt %d/%d): %s",
+                        attempt + 1, _MAX_RETRIES + 1, exc,
+                    )
+                if attempt < _MAX_RETRIES:
+                    await asyncio.sleep(1)  # backoff before retry
+
+            if text is None:
+                logger.error("Gemini frame analysis exhausted all retries")
                 text = (
                     '{"animal":"unknown","visible_injuries":[],"severity":"UNKNOWN",'
                     '"changes_since_last":"","guidance":"Hold camera steady",'
@@ -186,7 +206,7 @@ class GeminiVisionService:
             session.frame_count += 1
             session.updated_at = time.time()
 
-            asyncio.get_event_loop().create_task(
+            asyncio.create_task(
                 db.upsert_vision_session(
                     session.session_id,
                     session.latest_analysis,

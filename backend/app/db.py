@@ -2,9 +2,13 @@
 
 Stores vision sessions and call records so they survive backend restarts.
 Uses aiosqlite for async access with a single file-based database.
+
+Uses a **single persistent connection** protected by an asyncio.Lock to
+avoid "database is locked" errors under concurrent vision + call load.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -47,13 +51,37 @@ CREATE TABLE IF NOT EXISTS call_records (
 );
 """
 
+# ── Persistent connection ───────────────────────────────────────────────────
+
+_conn: Optional[aiosqlite.Connection] = None
+_lock = asyncio.Lock()
+
 
 async def init_db() -> None:
-    """Create tables if they don't exist."""
-    async with aiosqlite.connect(_DB_PATH) as db:
-        await db.executescript(_SCHEMA)
-        await db.commit()
-    logger.info("database initialised at %s", _DB_PATH)
+    """Create tables if they don't exist and open the persistent connection."""
+    global _conn
+    _conn = await aiosqlite.connect(_DB_PATH)
+    _conn.row_factory = aiosqlite.Row
+    await _conn.executescript(_SCHEMA)
+    await _conn.commit()
+    logger.info("database initialised at %s (persistent connection)", _DB_PATH)
+
+
+async def close_db() -> None:
+    """Close the persistent connection (call during shutdown)."""
+    global _conn
+    if _conn is not None:
+        await _conn.close()
+        _conn = None
+        logger.info("database connection closed")
+
+
+async def _get_conn() -> aiosqlite.Connection:
+    """Return the persistent connection, initialising if needed."""
+    global _conn
+    if _conn is None:
+        await init_db()
+    return _conn
 
 
 # ── Vision sessions ─────────────────────────────────────────────────────────
@@ -66,8 +94,9 @@ async def upsert_vision_session(
     updated_at: float,
     created_at: float,
 ) -> None:
-    async with aiosqlite.connect(_DB_PATH) as db:
-        await db.execute(
+    async with _lock:
+        conn = await _get_conn()
+        await conn.execute(
             """
             INSERT INTO vision_sessions
                 (session_id, analysis, severity, frame_count, updated_at, created_at)
@@ -80,13 +109,13 @@ async def upsert_vision_session(
             """,
             (session_id, analysis, severity, frame_count, updated_at, created_at),
         )
-        await db.commit()
+        await conn.commit()
 
 
 async def load_vision_session(session_id: str) -> Optional[dict[str, Any]]:
-    async with aiosqlite.connect(_DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
+    async with _lock:
+        conn = await _get_conn()
+        cursor = await conn.execute(
             "SELECT * FROM vision_sessions WHERE session_id = ?",
             (session_id,),
         )
@@ -95,12 +124,13 @@ async def load_vision_session(session_id: str) -> Optional[dict[str, Any]]:
 
 
 async def delete_vision_session(session_id: str) -> None:
-    async with aiosqlite.connect(_DB_PATH) as db:
-        await db.execute(
+    async with _lock:
+        conn = await _get_conn()
+        await conn.execute(
             "DELETE FROM vision_sessions WHERE session_id = ?",
             (session_id,),
         )
-        await db.commit()
+        await conn.commit()
 
 
 # ── Call records ─────────────────────────────────────────────────────────────
@@ -136,8 +166,9 @@ async def upsert_call_record(
     created_at: float = 0,
     updated_at: float = 0,
 ) -> None:
-    async with aiosqlite.connect(_DB_PATH) as db:
-        await db.execute(
+    async with _lock:
+        conn = await _get_conn()
+        await conn.execute(
             """
             INSERT INTO call_records
                 (call_id, agent_type, conversation_id, status,
@@ -180,13 +211,13 @@ async def upsert_call_record(
                 updated_at,
             ),
         )
-        await db.commit()
+        await conn.commit()
 
 
 async def load_call_record(call_id: str) -> Optional[dict[str, Any]]:
-    async with aiosqlite.connect(_DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
+    async with _lock:
+        conn = await _get_conn()
+        cursor = await conn.execute(
             "SELECT * FROM call_records WHERE call_id = ?",
             (call_id,),
         )
@@ -208,9 +239,9 @@ async def load_call_record(call_id: str) -> Optional[dict[str, Any]]:
 
 
 async def load_all_call_records() -> list[dict[str, Any]]:
-    async with aiosqlite.connect(_DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
+    async with _lock:
+        conn = await _get_conn()
+        cursor = await conn.execute(
             "SELECT * FROM call_records ORDER BY created_at DESC"
         )
         rows = await cursor.fetchall()
